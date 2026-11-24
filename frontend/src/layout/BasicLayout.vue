@@ -67,7 +67,7 @@
         :class="{ active: selectedKeys.includes(item.key) }"
         @click="router.push(item.path)"
       >
-        <AppIcon :name="resolveNavIcon(item.key)" :size="18" />
+        <AppIcon :name="item.icon" :size="18" />
         {{ item.label }}
       </button>
     </nav>
@@ -104,49 +104,66 @@ const selectedKeys = computed(() => {
   return [route.path]
 })
 
-const isOwner = computed(() => store.getters['auth/isOwner'])
+const FALLBACK_MENUS = [
+  { id: 'f1', name: '今天', path: '/Main/Today', icon: 'lucide:calendar-heart', children: [] },
+  { id: 'f2', name: '时间线', path: '/Main/Timeline', icon: 'lucide:history', children: [] },
+  { id: 'f3', name: '统计', path: '/Main/Stats', icon: 'lucide:chart-column', children: [] },
+  {
+    id: 'f4',
+    name: '账户设置',
+    path: '/System/Account',
+    icon: 'lucide:user-round',
+    children: [],
+  },
+]
 
-function menuIcon(path) {
-  return h(AppIcon, { name: resolveNavIcon(path), size: 18 })
+function menuIcon(node) {
+  return h(AppIcon, { name: node.icon || resolveNavIcon(node.path), size: 18 })
+}
+
+function toMenuItems(nodes) {
+  return (nodes || [])
+    .filter((node) => node.path || node.children?.length)
+    .map((node) => {
+      const item = {
+        key: node.path || `menu:${node.id}`,
+        label: node.name,
+        icon: menuIcon(node),
+      }
+      if (node.children?.length) item.children = toMenuItems(node.children)
+      return item
+    })
 }
 
 const menuItems = computed(() => {
-  const items = [
-    { key: '/Main/Today', label: '今天', icon: menuIcon('/Main/Today') },
-    { key: '/Main/Timeline', label: '时间线', icon: menuIcon('/Main/Timeline') },
-    { key: '/Main/Stats', label: '统计', icon: menuIcon('/Main/Stats') },
-  ]
-  if (!isOwner.value) {
-    // 普通成员只保留账户设置，不展示系统管理分组
-    items.push({ key: '/System/Account', label: '账户设置', icon: menuIcon('/System/Account') })
-    return items
-  }
-  items.push({
-    key: 'system',
-    label: '系统管理',
-    icon: h(AppIcon, { name: 'lucide:settings', size: 18 }),
-    children: [
-      { key: '/System/Account', label: '账户设置', icon: menuIcon('/System/Account') },
-      { key: '/System/Settings', label: '系统设置', icon: menuIcon('/System/Settings') },
-      { key: '/System/User', label: '用户管理', icon: menuIcon('/System/User') },
-      { key: '/System/Role', label: '角色管理', icon: menuIcon('/System/Role') },
-      {
-        key: '/System/Organization',
-        label: '组织管理',
-        icon: menuIcon('/System/Organization'),
-      },
-      { key: '/System/BaseCode', label: '字典管理', icon: menuIcon('/System/BaseCode') },
-    ],
-  })
-  return items
+  const menus = store.state.auth.menus
+  return toMenuItems(menus.length ? menus : FALLBACK_MENUS)
 })
 
-const mobileTabs = [
-  { key: '/Main/Today', label: '今天', path: '/Main/Today' },
-  { key: '/Main/Timeline', label: '时间线', path: '/Main/Timeline' },
-  { key: '/Main/Stats', label: '统计', path: '/Main/Stats' },
-  { key: '/System/Account', label: '我的', path: '/System/Account' },
-]
+function flattenMenus(nodes) {
+  return (nodes || []).flatMap((node) => [
+    ...(node.path ? [node] : []),
+    ...flattenMenus(node.children),
+  ])
+}
+
+const MOBILE_ORDER = ['/Main/Today', '/Main/Timeline', '/Main/Stats', '/System/Account']
+
+const mobileTabs = computed(() => {
+  const menus = store.state.auth.menus
+  const leaves = flattenMenus(menus.length ? menus : FALLBACK_MENUS)
+  const byPath = new Map(leaves.map((node) => [node.path, node]))
+  const ordered = MOBILE_ORDER.filter((path) => byPath.has(path)).map((path) =>
+    byPath.get(path),
+  )
+  const rest = leaves.filter((node) => !MOBILE_ORDER.includes(node.path))
+  return [...ordered, ...rest].slice(0, 4).map((node) => ({
+    key: node.path,
+    label: node.name,
+    path: node.path,
+    icon: node.icon || resolveNavIcon(node.path),
+  }))
+})
 
 const userMenu = computed(() => ({
   items: [
@@ -184,6 +201,7 @@ onMounted(() => {
   syncViewport()
   window.addEventListener('resize', syncViewport)
   store.dispatch('dict/load')
+  store.dispatch('auth/loadMenus')
 })
 
 onBeforeUnmount(() => {
