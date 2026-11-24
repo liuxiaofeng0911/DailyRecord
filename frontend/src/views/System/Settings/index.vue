@@ -37,7 +37,7 @@
       </div>
       <a-descriptions :column="1" bordered size="small">
         <a-descriptions-item label="AI 能力">
-          {{ aiEnabled ? '已开启（需同时配置 OLLAMA 环境变量）' : '未开启（P2，可后续接入本地模型）' }}
+          {{ aiEnabled ? '已开启' : '未开启' }}
         </a-descriptions-item>
         <a-descriptions-item label="初始化状态">
           {{ bootstrapDone ? '已完成' : '未完成' }}
@@ -46,12 +46,28 @@
     </section>
 
     <section class="surface">
+      <div class="row-between section-head">
+        <strong>照片库（Immich）</strong>
+        <div class="photo-head">
+          <a-tag :color="photoTagColor">{{ photoTagText }}</a-tag>
+          <a-button size="small" :loading="photoLoading" @click="loadImmich">重新检测</a-button>
+        </div>
+      </div>
+      <p class="muted info-text">{{ photoDetail }}</p>
+      <p class="muted info-text">
+        照片库是独立部署的服务。未接入时照片保存在服务器本机，记录、上传与回收站均可正常使用；
+        接入后可在今天页从照片库导入已有照片。配置方式：在服务器的 .env 中设置
+        IMMICH_URL 与 IMMICH_API_KEY，然后重启 api 服务。
+      </p>
+    </section>
+
+    <section class="surface">
       <div class="section-head">
         <strong>关于邮箱</strong>
       </div>
       <p class="muted info-text">
-        当前未接入邮件服务。邮箱只保存在本机数据库，作为账号的唯一标识与登录方式之一（也可用登录账号登录）。
-        后续若配置 SMTP，可用于自助找回密码；在此之前忘记密码请联系所有者重置。
+        当前未接入邮件服务。邮箱只保存在服务器，不会对外发送，可用于登录或找回账号。
+        后续配置邮件服务后，可支持自助找回密码；在此之前忘记密码请联系所有者重置。
       </p>
     </section>
   </div>
@@ -61,15 +77,34 @@
 import { message } from 'antdv-next'
 import { computed, onMounted, ref } from 'vue'
 
-import { systemApi } from '@/api/api'
+import { immichApi, systemApi } from '@/api/api'
 
 const loading = ref(false)
 const saving = ref(false)
 const switches = ref({})
 const registerMode = ref('CLOSED')
+const photoStatus = ref({ enabled: false, available: false, message: '' })
+const photoLoading = ref(false)
 
 const aiEnabled = computed(() => switches.value.DAILYRECORD_AI_ENABLED === '1')
 const bootstrapDone = computed(() => switches.value.DAILYRECORD_BOOTSTRAP_DONE === 'Y')
+const photoTagText = computed(() => {
+  if (!photoStatus.value.enabled) return '未接入'
+  return photoStatus.value.available ? '已接入' : '暂时不可用'
+})
+const photoTagColor = computed(() => {
+  if (!photoStatus.value.enabled) return 'default'
+  return photoStatus.value.available ? 'green' : 'orange'
+})
+const photoDetail = computed(() => {
+  if (!photoStatus.value.enabled) {
+    return '当前使用服务器本机存储，照片不会丢失。'
+  }
+  if (!photoStatus.value.available) {
+    return photoStatus.value.message || '照片库暂时无法连接，照片会保存在服务器本机。'
+  }
+  return '照片库连接正常，上传照片会保存到照片库。'
+})
 
 async function load() {
   loading.value = true
@@ -95,7 +130,21 @@ async function saveRegisterMode() {
   }
 }
 
-onMounted(load)
+async function loadImmich() {
+  photoLoading.value = true
+  try {
+    photoStatus.value = await immichApi.status()
+  } catch {
+    photoStatus.value = { enabled: false, available: false, message: '' }
+  } finally {
+    photoLoading.value = false
+  }
+}
+
+onMounted(() => {
+  load()
+  loadImmich()
+})
 </script>
 
 <style scoped lang="less">
@@ -127,8 +176,14 @@ onMounted(load)
 }
 
 .info-text {
-  margin: 0;
+  margin: 0 0 var(--space-2);
   line-height: 1.8;
   font-size: 13px;
+}
+
+.photo-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 </style>

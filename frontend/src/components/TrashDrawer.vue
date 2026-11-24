@@ -143,7 +143,7 @@ function confirmPurge(ids) {
   if (!ids.length) return
   Modal.confirm({
     title: `彻底删除 ${ids.length} 张照片？`,
-    content: '将立即清理文件与引用，无法恢复；从 Immich 导入的原图不会被删除。',
+    content: '将立即清理文件与引用，无法恢复；从照片库导入的原图不会被删除。',
     okText: '彻底删除',
     okType: 'danger',
     cancelText: '取消',
