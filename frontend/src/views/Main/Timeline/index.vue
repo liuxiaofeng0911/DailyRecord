@@ -77,6 +77,14 @@
                 <a-tag v-if="item.mood" color="blue">{{ item.mood }}</a-tag>
                 <a-tag v-for="tag in item.tags" :key="tag.id">{{ tag.name }}</a-tag>
                 <span class="muted">{{ item.photos.length }} 个素材</span>
+                <a-button
+                  size="small"
+                  type="link"
+                  class="history-link"
+                  @click.stop="openHistory(item.entryDate)"
+                >
+                  修改历史
+                </a-button>
               </div>
             </div>
           </div>
@@ -94,6 +102,8 @@
         @change="onPageChange"
       />
     </div>
+
+    <HistoryDrawer v-model:open="historyOpen" :date="historyDate" />
   </div>
 </template>
 
@@ -104,6 +114,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
 import { entryApi, photoApi } from '@/api/api'
+import HistoryDrawer from '@/components/HistoryDrawer.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import { useAutoRefresh } from '@/utils'
 
@@ -119,6 +130,8 @@ const total = ref(0)
 const pageNumber = ref(Number(route.query.page) || 1)
 const pageSize = ref(20)
 const renderedVersion = ref(-1)
+const historyOpen = ref(false)
+const historyDate = ref('')
 
 const filters = reactive({
   keyword: route.query.keyword || '',
@@ -237,6 +250,11 @@ function onPageChange(page) {
 
 function openDay(date) {
   router.push({ path: '/Main/Today', query: { date } })
+}
+
+function openHistory(date) {
+  historyDate.value = date
+  historyOpen.value = true
 }
 
 watch(
@@ -390,6 +408,12 @@ onActivated(() => {
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 8px;
+  font-size: 12px;
+}
+
+.history-link {
+  margin-left: auto;
+  padding: 0;
   font-size: 12px;
 }
 
