@@ -12,6 +12,7 @@
         <span v-if="streak > 0" class="chip">连续记录 {{ streak }} 天</span>
       </div>
       <div class="header-actions">
+        <RefreshButton :last-updated="lastUpdated" :loading="loading" @refresh="manualRefresh" />
         <a-button :disabled="!entry" @click="removeEntry">删除当天</a-button>
         <a-button type="primary" :loading="saving" @click="save">保存</a-button>
       </div>
@@ -150,7 +151,10 @@ import { useStore } from 'vuex'
 
 import { entryApi, immichApi, photoApi } from '@/api/api'
 import PhotoGrid from '@/components/PhotoGrid.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { draftKey, relativeDay, today } from '@/utils'
+
+defineOptions({ name: 'Today' })
 
 const route = useRoute()
 const router = useRouter()
@@ -169,6 +173,7 @@ const uploading = ref(false)
 const uploadPercent = ref(0)
 const fileInput = ref(null)
 const dirty = ref(false)
+const lastUpdated = ref(null)
 
 const immichOpen = ref(false)
 const immichLoading = ref(false)
@@ -255,9 +260,22 @@ async function load() {
       streak.value = 0
     }
     dirty.value = false
+    lastUpdated.value = new Date()
   } finally {
     loading.value = false
   }
+}
+
+function bumpVersions() {
+  store.commit('app/bumpDataVersion', ['entries', 'stats'])
+}
+
+function manualRefresh() {
+  if (dirty.value) {
+    message.warning('有未保存的修改，已保留当前内容')
+    return
+  }
+  load()
 }
 
 async function save() {
@@ -279,6 +297,7 @@ async function save() {
     )
     clearDraft()
     dirty.value = false
+    bumpVersions()
     message.success('已保存今天的记录')
   } catch (error) {
     if (error?.code === 1009) {
@@ -331,6 +350,7 @@ async function uploadFiles(files) {
       message.warning(result.errors.map((item) => `${item.filename}: ${item.reason}`).join('；'))
     }
     message.success(`已上传 ${result.photos.length} 个文件`)
+    bumpVersions()
     await load()
   } finally {
     uploading.value = false
@@ -367,6 +387,7 @@ function setCover(photo) {
       }))
     }
     message.success('已设为封面')
+    bumpVersions()
   })
 }
 
@@ -384,6 +405,7 @@ function removePhoto(photo) {
         entry.value.photos = (entry.value.photos || []).filter((item) => item.id !== photo.id)
       }
       message.success('已移除')
+      bumpVersions()
     },
   })
 }
@@ -397,6 +419,7 @@ function removeEntry() {
     onOk: async () => {
       await entryApi.remove(date.value)
       message.success('记录已删除')
+      bumpVersions()
       await load()
     },
   })
@@ -435,6 +458,7 @@ async function importSelected() {
     const result = await immichApi.import({ date: date.value, assetIds: selectedAssets.value })
     message.success(`已导入 ${result.imported} 张照片`)
     immichOpen.value = false
+    bumpVersions()
     await load()
   } finally {
     immichImporting.value = false

@@ -5,7 +5,10 @@
         <h2 class="page-title">时间线</h2>
         <p class="page-subtitle">按月回看每一天的照片与记忆点。</p>
       </div>
-      <a-button type="primary" @click="$router.push('/Main/Today')">记今天</a-button>
+      <div class="head-actions">
+        <RefreshButton :last-updated="lastUpdated" :loading="refreshing" @refresh="run(false)" />
+        <a-button type="primary" @click="$router.push('/Main/Today')">记今天</a-button>
+      </div>
     </div>
 
     <section class="surface filter-card">
@@ -96,11 +99,15 @@
 
 <script setup>
 import dayjs from 'dayjs'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
 import { entryApi, photoApi } from '@/api/api'
+import RefreshButton from '@/components/RefreshButton.vue'
+import { useAutoRefresh } from '@/utils'
+
+defineOptions({ name: 'Timeline' })
 
 const route = useRoute()
 const router = useRouter()
@@ -111,6 +118,7 @@ const entries = ref([])
 const total = ref(0)
 const pageNumber = ref(Number(route.query.page) || 1)
 const pageSize = ref(20)
+const renderedVersion = ref(-1)
 
 const filters = reactive({
   keyword: route.query.keyword || '',
@@ -172,8 +180,8 @@ function buildWheres() {
   return wheres
 }
 
-async function load() {
-  loading.value = true
+async function load({ silent = false } = {}) {
+  if (!silent) loading.value = true
   try {
     const data = await entryApi.list({
       page: { pageNumber: pageNumber.value, pageSize: pageSize.value },
@@ -182,10 +190,13 @@ async function load() {
     })
     entries.value = data.list || []
     total.value = data.totalRow || 0
+    renderedVersion.value = store.state.app.dataVersion.entries
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
+
+const { lastUpdated, refreshing, run } = useAutoRefresh(load)
 
 function syncQuery() {
   router.replace({
@@ -202,7 +213,7 @@ function syncQuery() {
 function applyFilters() {
   pageNumber.value = 1
   syncQuery()
-  load()
+  run(false)
 }
 
 function resetFilters() {
@@ -221,7 +232,7 @@ function applyPreset(preset) {
 function onPageChange(page) {
   pageNumber.value = page
   syncQuery()
-  load()
+  run(false)
 }
 
 function openDay(date) {
@@ -236,12 +247,16 @@ watch(
       filters.mood = query.mood || undefined
       filters.tag = query.tag || ''
       pageNumber.value = Number(query.page) || 1
-      load()
+      run(false)
     }
   },
 )
 
-onMounted(load)
+onMounted(() => run(false))
+
+onActivated(() => {
+  if (renderedVersion.value !== store.state.app.dataVersion.entries) run(true)
+})
 </script>
 
 <style scoped lang="less">
@@ -255,6 +270,12 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .filter-row {
