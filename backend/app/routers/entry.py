@@ -1,7 +1,7 @@
 import logging
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -12,10 +12,11 @@ from ..common.result import ok
 from ..common.xss import guard as xss_guard
 from ..db import get_db
 from ..deps import UserContext, get_current_user
-from ..models import DailyEntry, Photo, Tag
+from ..models import ChangeLog, DailyEntry, Photo, Tag
 from ..schemas.entry import (
     EntryDeleteRequest,
     EntryGetRequest,
+    EntryHistoryRequest,
     EntryListRequest,
     EntryOut,
     EntrySaveRequest,
@@ -23,7 +24,7 @@ from ..schemas.entry import (
     TagOut,
 )
 from ..schemas.stats import CalendarRequest
-from ..services import stats_service
+from ..services import audit, stats_service
 from ..services.entry_service import (
     active_photos,
     attach_photos,
@@ -58,7 +59,7 @@ def _load_by_id(db: Session, user_id: int, entry_id: int) -> DailyEntry | None:
     ).first()
 
 
-def _serialize(entry: DailyEntry) -> EntryOut:
+def _serialize(entry: DailyEntry, changed_fields: list[str] | None = None) -> EntryOut:
     return EntryOut(
         id=entry.id,
         entry_date=entry.entry_date,
@@ -73,6 +74,7 @@ def _serialize(entry: DailyEntry) -> EntryOut:
         ],
         version=entry.version or 0,
         update_time=entry.update_time,
+        changed_fields=changed_fields or [],
     )
 
 
@@ -178,11 +180,14 @@ def get_entry(
 @router.post("/save")
 def save_entry(
     payload: EntrySaveRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
     entry = _load_entry(db, user.id, payload.entry_date)
-    if entry is None:
+    created = entry is None
+    before = None
+    if created:
         entry = DailyEntry(
             user_id=user.id,
             entry_date=payload.entry_date,
@@ -195,6 +200,7 @@ def save_entry(
     else:
         if payload.version is not None and int(payload.version) != int(entry.version or 0):
             raise ApiError(codes.VERSION_CONFLICT, "记录已被修改，请刷新后重试")
+        before = audit.entry_snapshot(entry, list(entry.photos))
 
     if payload.note is not None:
         entry.note = payload.note.strip()
@@ -226,8 +232,22 @@ def save_entry(
     entry.version = int(entry.version or 0) + 1
     entry.update_user = user.userid
     entry.update_time = now_shanghai()
+    db.flush()
+
+    after = audit.snapshot_from_db(db, entry)
+    changes, changed_fields = audit.diff_entry(before, after, created)
+    if created or changes:
+        audit.add_log(
+            db,
+            user=user,
+            action="CREATE" if created else "UPDATE",
+            entity_type="ENTRY",
+            changes=changes,
+            entry=entry,
+            request=request,
+        )
     db.commit()
-    return ok(_serialize(_load_by_id(db, user.id, entry.id)))
+    return ok(_serialize(_load_by_id(db, user.id, entry.id), changed_fields))
 
 
 @router.post("/calendar")
@@ -251,15 +271,64 @@ def calendar(
 @router.post("/delete")
 def delete_entry(
     payload: EntryDeleteRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
     entry = _load_entry(db, user.id, payload.entry_date)
     if entry is None:
         raise not_found("记录不存在")
-    for photo in active_photos(list(entry.photos)):
+    photos = active_photos(list(entry.photos))
+    summary = [
+        {
+            "field": "entry",
+            "op": "delete",
+            "noteLength": len(entry.note or ""),
+            "mood": entry.mood,
+            "tags": [tag.name for tag in entry.tags],
+            "photoCount": len(photos),
+        }
+    ]
+    audit.add_log(
+        db,
+        user=user,
+        action="DELETE",
+        entity_type="ENTRY",
+        changes=summary,
+        entry=entry,
+        request=request,
+    )
+    for photo in photos:
         photo.entry_id = None
         photo.is_cover = False
     db.delete(entry)
     db.commit()
     return ok(None)
+
+
+@router.post("/history")
+def entry_history(
+    payload: EntryHistoryRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    page_data = payload.page or {}
+    try:
+        page_number = max(int(page_data.get("pageNumber") or payload.page_number or 1), 1)
+        page_size = min(
+            max(int(page_data.get("pageSize") or payload.page_size or 20), 1), MAX_PAGE_SIZE
+        )
+    except (TypeError, ValueError):
+        raise ApiError(codes.BAD_REQUEST, "分页参数不正确") from None
+
+    base = select(ChangeLog).where(
+        ChangeLog.user_id == user.id, ChangeLog.entry_date == payload.entry_date
+    )
+    total = db.scalar(select(func.count()).select_from(base.order_by(None).subquery())) or 0
+    rows = db.scalars(
+        base.order_by(ChangeLog.created_at.desc(), ChangeLog.id.desc())
+        .offset((page_number - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    items = [audit.serialize_log(row) for row in rows]
+    return ok(page_payload(items, total, page_number, page_size))

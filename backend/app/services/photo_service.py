@@ -6,7 +6,7 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import DailyEntry, Photo
+from ..models import ChangeLog, DailyEntry, Photo
 from . import storage
 from .immich import ImmichClient, ImmichError
 from .timeutil import now_shanghai
@@ -92,6 +92,28 @@ async def purge_expired(db: Session, limit: int = PURGE_LIMIT) -> dict:
     failed: list[str] = []
     for photo in rows:
         try:
+            entry = db.get(DailyEntry, photo.entry_id) if photo.entry_id else None
+            db.add(
+                ChangeLog(
+                    user_id=photo.user_id,
+                    operator_id=0,
+                    operator_name="system",
+                    entity_type="PHOTO",
+                    entity_id=photo.id,
+                    entry_id=photo.entry_id,
+                    entry_date=entry.entry_date if entry else None,
+                    action="PURGE",
+                    changes=[
+                        {
+                            "field": "photo",
+                            "op": "purge",
+                            "mediaType": photo.media_type,
+                            "origin": photo.origin,
+                        }
+                    ],
+                    created_at=now_shanghai(),
+                )
+            )
             await purge_photo(db, photo)
         except Exception as exc:  # pragma: no cover - 防御性
             logger.warning("清理照片 %s 失败: %s", photo.id, exc)
