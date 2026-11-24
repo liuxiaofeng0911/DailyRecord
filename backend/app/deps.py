@@ -18,7 +18,7 @@ from .services.auth_service import role_code_of
 from .services.timeutil import now_shanghai
 
 COOKIE_NAME = "dr_token"
-COOKIE_PATH = "/api/photo"
+COOKIE_PATH = "/api"
 
 
 @dataclass
@@ -43,7 +43,7 @@ def _extract_token(request: Request) -> str:
     token = header.strip()
     if token.lower().startswith("bearer "):
         token = token[7:].strip()
-    if not token and request.url.path.startswith("/photo"):
+    if not token and request.url.path.startswith(("/photo", "/immich")):
         token = request.cookies.get(COOKIE_NAME, "")
     return token
 

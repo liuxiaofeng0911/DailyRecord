@@ -42,6 +42,91 @@ services:
     networks:
       - backend
 
+  immich-db:
+    image: ghcr.nju.edu.cn/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    environment:
+      POSTGRES_DB: immich
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${IMMICH_DB_PASSWORD:?请在 .env 中设置 IMMICH_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: ${TZ:-Asia/Shanghai}
+      PGTZ: ${APP_TIMEZONE:-Asia/Shanghai}
+    volumes:
+      - immich_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d immich"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+
+  immich-redis:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--appendonly", "yes"]
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - immich_redisdata:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+
+  immich-ml:
+    image: ghcr.nju.edu.cn/immich-app/immich-machine-learning:v1.135.3
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - immich_model_cache:/cache
+    expose:
+      - "3003"
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+
+  immich-server:
+    image: ghcr.nju.edu.cn/immich-app/immich-server:v1.135.3
+    environment:
+      DB_HOSTNAME: immich-db
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${IMMICH_DB_PASSWORD}
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: immich-redis
+      IMMICH_MACHINE_LEARNING_URL: http://immich-ml:3003
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - immich_upload:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "127.0.0.1:${IMMICH_PORT:-2283}:2283"
+    depends_on:
+      immich-db:
+        condition: service_healthy
+      immich-redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://127.0.0.1:2283/api/server/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+
   api:
     image: dailyrecord-api:${APP_VERSION:-latest}
     build:
@@ -89,7 +174,6 @@ services:
       APP_VERSION: ${APP_VERSION:-latest}
       TZ: ${TZ:-Asia/Shanghai}
       API_UPSTREAM: api:9111
-      IMMICH_UPSTREAM: ${IMMICH_UPSTREAM:-host.docker.internal:2283}
     ports:
       - "${WEB_PORT:-9110}:9110"
     extra_hosts:
@@ -105,6 +189,10 @@ volumes:
   pgdata:
   redisdata:
   apidata:
+  immich_pgdata:
+  immich_redisdata:
+  immich_upload:
+  immich_model_cache:
 
 networks:
   backend:

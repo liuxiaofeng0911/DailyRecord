@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from .db import SessionLocal
 from .models import ComUser, InviteCode
 from .security.password import hash_password, validate_password_strength
-from .services import photo_service
+from .services import credential_service, photo_service
 from .services.auth_service import revoke_all_sessions
 from .services.timeutil import now_shanghai
 
@@ -59,6 +59,27 @@ def purge_photos() -> None:
         print(f"已清理 {result['purged']} 张过期照片，失败 {len(result['failed'])} 张")
 
 
+def provision_immich() -> None:
+    with SessionLocal() as db:
+        users = db.scalars(
+            select(ComUser).where(ComUser.user_active == "Y").order_by(ComUser.id.asc())
+        ).all()
+        for user in users:
+            credential = credential_service.get_credential(db, user.id)
+            if credential is not None and credential.status == "active":
+                print(f"跳过 {user.userid}：照片库已开通")
+                continue
+            if credential is not None:
+                credential.provision_attempts = 0
+                db.commit()
+            result = asyncio.run(credential_service.provision_user(db, user))
+            if result is not None and result.status == "active":
+                print(f"开通成功 {user.userid}")
+            else:
+                error = result.last_provision_error if result is not None else "未启用自动开通"
+                print(f"开通失败 {user.userid}: {error}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="DailyRecord 运维工具")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -72,6 +93,7 @@ def main() -> None:
     invite.add_argument("--days", type=int, default=7)
 
     sub.add_parser("purge-photos", help="清理回收站中到期照片")
+    sub.add_parser("provision-immich", help="为所有未开通账号补开通 Immich 照片库")
 
     args = parser.parse_args()
     if args.command == "reset-password":
@@ -80,6 +102,8 @@ def main() -> None:
         print(create_invite(args.created_by, args.days))
     elif args.command == "purge-photos":
         purge_photos()
+    elif args.command == "provision-immich":
+        provision_immich()
 
 
 if __name__ == "__main__":

@@ -477,7 +477,7 @@ async function openImmich() {
 }
 
 function immichThumb(assetId) {
-  return `/immich/api/assets/${assetId}/thumbnail?size=thumbnail`
+  return `/api/immich/thumbnail/${assetId}`
 }
 
 async function importSelected() {

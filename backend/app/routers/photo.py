@@ -14,7 +14,7 @@ from ..common.xss import guard as xss_guard
 from ..config import settings
 from ..db import get_db
 from ..deps import UserContext, get_current_user
-from ..models import DailyEntry, Photo
+from ..models import ComUser, DailyEntry, Photo
 from ..schemas.entry import PhotoOut
 from ..schemas.photo import (
     PhotoDeleteRequest,
@@ -25,9 +25,9 @@ from ..schemas.photo import (
     TrashListRequest,
     UploadResult,
 )
-from ..services import audit, photo_service, storage
+from ..services import audit, credential_service, photo_service, storage
 from ..services.entry_service import clear_cover
-from ..services.immich import ImmichClient, ImmichError
+from ..services.immich import ImmichError
 from ..services.ollama import OllamaError, describe_image
 from ..services.timeutil import now_shanghai, parse_datetime
 
@@ -76,6 +76,11 @@ async def upload(
     errors: list[dict] = []
     explicit_taken = parse_datetime(str(taken_at_raw)) if taken_at_raw else None
 
+    entity = db.get(ComUser, user.id)
+    credential = await credential_service.ensure_credential(db, entity) if entity else None
+    client = credential_service.user_client(db, user.id)
+    album_id = (credential.album_id or "") if credential else ""
+
     for upload_file in uploads:
         filename = upload_file.filename or "upload"
         try:
@@ -85,6 +90,8 @@ async def upload(
                 filename=filename,
                 content=content,
                 content_type=upload_file.content_type or "",
+                client=client,
+                album_id=album_id,
             )
         except ApiError as exc:
             errors.append({"filename": filename, "reason": exc.message})
@@ -170,8 +177,14 @@ async def thumbnail(
     ).first()
     if photo is None:
         return JSONResponse(status_code=404, content={"code": 404, "message": "照片不存在"})
+    client = credential_service.user_client(db, user.id)
+    if photo.storage_kind == "immich" and client is None:
+        entity = db.get(ComUser, user.id)
+        if entity is not None:
+            await credential_service.ensure_credential(db, entity)
+            client = credential_service.user_client(db, user.id)
     try:
-        content, mime = await storage.read_bytes(photo, size="preview")
+        content, mime = await storage.read_bytes(photo, size="preview", client=client)
     except (FileNotFoundError, ImmichError):
         return JSONResponse(status_code=404, content={"code": 404, "message": "照片文件不存在"})
     return Response(
@@ -192,8 +205,14 @@ async def original(
     ).first()
     if photo is None:
         return JSONResponse(status_code=404, content={"code": 404, "message": "照片不存在"})
+    client = credential_service.user_client(db, user.id)
+    if photo.storage_kind == "immich" and client is None:
+        entity = db.get(ComUser, user.id)
+        if entity is not None:
+            await credential_service.ensure_credential(db, entity)
+            client = credential_service.user_client(db, user.id)
     try:
-        content, mime = await storage.read_bytes(photo, size="original")
+        content, mime = await storage.read_bytes(photo, size="original", client=client)
     except (FileNotFoundError, ImmichError):
         return JSONResponse(status_code=404, content={"code": 404, "message": "照片文件不存在"})
     return Response(content=content, media_type=mime)
@@ -466,7 +485,9 @@ async def describe_photo(
         return ok(PhotoOut.model_validate(photo))
 
     try:
-        content, _ = await storage.read_bytes(photo, size="preview")
+        content, _ = await storage.read_bytes(
+            photo, size="preview", client=credential_service.user_client(db, user.id)
+        )
         note_hint = ""
         if photo.entry_id:
             entry = db.get(DailyEntry, photo.entry_id)
@@ -484,7 +505,9 @@ async def describe_photo(
     photo.ai_attempts = int(photo.ai_attempts or 0) + 1
     if settings.immich_write_description and photo.immich_asset_id and settings.immich_enabled:
         try:
-            await ImmichClient().update_description(photo.immich_asset_id, photo.caption)
+            client = credential_service.user_client(db, user.id)
+            if client is not None:
+                await client.update_description(photo.immich_asset_id, photo.caption)
         except ImmichError:
             pass
     db.commit()

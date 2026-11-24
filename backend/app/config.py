@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     immich_api_key: str = ""
     immich_album_id: str = ""
     immich_write_description: bool = True
+    immich_admin_api_key: str = ""
+    immich_auto_provision: bool = True
+    immich_provision_quota: int = 20
+    credential_encryption_key: str = ""
 
     ai_enabled: bool = False
     ollama_url: str = "http://ollama:11434"
@@ -56,7 +60,16 @@ class Settings(BaseSettings):
 
     @property
     def immich_enabled(self) -> bool:
-        return bool(self.immich_url and self.immich_api_key)
+        return bool(self.immich_url and (self.immich_admin_api_key or self.immich_api_key))
+
+    @property
+    def immich_provision_enabled(self) -> bool:
+        return bool(
+            self.immich_url
+            and self.immich_admin_api_key
+            and self.credential_encryption_key
+            and self.immich_auto_provision
+        )
 
     @property
     def cors_origin_list(self) -> list[str]:

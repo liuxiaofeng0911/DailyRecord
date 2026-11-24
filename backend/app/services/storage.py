@@ -178,15 +178,25 @@ def _local_dir(user_id: int) -> Path:
 
 
 async def store(
-    *, user_id: int, filename: str, content: bytes, content_type: str
+    *,
+    user_id: int,
+    filename: str,
+    content: bytes,
+    content_type: str,
+    client: ImmichClient | None = None,
+    album_id: str = "",
 ) -> dict:
     info = inspect_media(filename, content, content_type)
     payload = info.pop("content")
     taken_at = now_shanghai()
-    if settings.immich_enabled:
+    if client is not None and client.configured:
         try:
-            asset = await ImmichClient().upload_asset(
-                f"{uuid.uuid4().hex}.{info['ext']}", payload, info["mime_type"], taken_at
+            asset = await client.upload_asset(
+                f"{uuid.uuid4().hex}.{info['ext']}",
+                payload,
+                info["mime_type"],
+                taken_at,
+                album_id=album_id,
             )
             return {
                 **info,
@@ -209,9 +219,12 @@ async def store(
     }
 
 
-async def read_bytes(photo: Photo, size: str = "preview") -> tuple[bytes, str]:
+async def read_bytes(
+    photo: Photo, size: str = "preview", client: ImmichClient | None = None
+) -> tuple[bytes, str]:
     if photo.storage_kind == "immich" and photo.immich_asset_id:
-        client = ImmichClient()
+        if client is None or not client.configured:
+            raise FileNotFoundError("照片库凭据不可用")
         if size == "original":
             return await client.original(photo.immich_asset_id)
         return await client.thumbnail(photo.immich_asset_id, size="preview")
