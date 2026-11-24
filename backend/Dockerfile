@@ -1,10 +1,15 @@
 FROM python:3.12-slim
 
+ARG APP_VERSION=dev
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     TZ=Asia/Shanghai \
+    APP_VERSION=${APP_VERSION} \
     API_PORT=8000
+
+LABEL org.opencontainers.image.version=$APP_VERSION
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \

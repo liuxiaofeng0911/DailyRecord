@@ -61,7 +61,7 @@ async def lifespan(_app: FastAPI):
             await purge_task
 
 
-app = FastAPI(title="每日记录 API", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="每日记录 API", version=settings.app_version, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -128,7 +128,7 @@ app.include_router(system.router)
 
 @app.get("/health")
 def health():
-    return ok({"status": "ok"})
+    return ok({"status": "ok", "version": settings.app_version})
 
 
 @app.get("/ready")

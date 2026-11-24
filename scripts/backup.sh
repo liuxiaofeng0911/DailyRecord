@@ -33,6 +33,11 @@ fi
 echo "==> 备份配置"
 cp .env "$TARGET/env.backup" 2>/dev/null || true
 cp docker-compose.yml "$TARGET/" 2>/dev/null || true
+if [ -f VERSION ]; then
+    cp VERSION "$TARGET/"
+fi
+VERSION_LABEL=$(tr -d ' \r\n' < VERSION 2>/dev/null || true)
+printf 'version=%s\nbackup_at=%s\n' "${VERSION_LABEL:-unknown}" "$STAMP" > "$TARGET/version.txt"
 
 echo "==> 生成校验和"
 ( cd "$TARGET" && sha256sum ./* > SHA256SUMS 2>/dev/null || true )

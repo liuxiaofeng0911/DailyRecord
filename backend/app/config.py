@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     env: str = "dev"
     log_level: str = "INFO"
+    app_version: str = "0.1.0"
 
     database_url: str = "sqlite:///./data/diary.db"
     data_dir: Path = Path("./data")

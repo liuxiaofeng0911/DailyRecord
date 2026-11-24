@@ -1,5 +1,8 @@
 FROM node:18.20-alpine AS build
 
+ARG APP_VERSION=dev
+ENV VITE_APP_VERSION=${APP_VERSION}
+
 WORKDIR /app
 
 COPY frontend/package*.json ./
@@ -14,9 +17,14 @@ RUN npm run build
 
 FROM nginx:1.27-alpine
 
+ARG APP_VERSION=dev
+
 ENV TZ=Asia/Shanghai \
+    APP_VERSION=${APP_VERSION} \
     API_UPSTREAM=api:8000 \
     IMMICH_UPSTREAM=immich-server:2283
+
+LABEL org.opencontainers.image.version=$APP_VERSION
 
 RUN apk add --no-cache tzdata \
     && mkdir -p /var/cache/nginx/photo \
