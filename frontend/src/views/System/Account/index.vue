@@ -3,7 +3,7 @@
     <div class="row-between page-head">
       <div>
         <h2 class="page-title">账户设置</h2>
-        <p class="page-subtitle">管理密码、登录设备与数据导出。</p>
+        <p class="page-subtitle">管理账号、照片库与数据导出。</p>
       </div>
       <a-button @click="pwdOpen = true">修改密码</a-button>
     </div>
@@ -20,6 +20,17 @@
         <a-descriptions-item label="角色">{{ roleLabel }}</a-descriptions-item>
         <a-descriptions-item label="版本">{{ appVersion }}</a-descriptions-item>
       </a-descriptions>
+    </section>
+
+    <section class="surface">
+      <div class="row-between section-head">
+        <strong>照片库</strong>
+        <a-tag :color="photoTagColor">{{ photoTagText }}</a-tag>
+      </div>
+      <p class="muted info-text">{{ photoDetail }}</p>
+      <p class="muted info-text">
+        照片库是独立部署的照片服务，需要管理员在服务器配置；普通账号无需单独开通。
+      </p>
     </section>
 
     <section class="surface">
@@ -116,7 +127,7 @@ import { Modal, message } from 'antdv-next'
 import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 
-import { authApi, exportApi, tagApi } from '@/api/api'
+import { authApi, exportApi, immichApi, tagApi } from '@/api/api'
 import AppIcon from '@/components/AppIcon.vue'
 import EditPwdModal from '@/components/EditPwdModal.vue'
 import TrashDrawer from '@/components/TrashDrawer.vue'
@@ -132,6 +143,27 @@ const sessionLoading = ref(false)
 const exporting = ref('')
 const tags = ref([])
 const tagLoading = ref(false)
+const photoStatus = ref({ enabled: false, available: false, message: '' })
+
+const photoTagText = computed(() => {
+  if (!photoStatus.value.enabled) return '本机存储'
+  return photoStatus.value.available ? '已接入' : '暂时不可用'
+})
+
+const photoTagColor = computed(() => {
+  if (!photoStatus.value.enabled) return 'default'
+  return photoStatus.value.available ? 'green' : 'orange'
+})
+
+const photoDetail = computed(() => {
+  if (!photoStatus.value.enabled) {
+    return '照片库尚未接入，照片会保存在服务器本机；记录、上传、回收站均可正常使用。'
+  }
+  if (!photoStatus.value.available) {
+    return photoStatus.value.message || '照片库暂时无法连接，照片会保存在服务器本机。'
+  }
+  return '照片会保存到照片库，也可以从照片库导入已有照片。'
+})
 
 const user = computed(() => store.state.auth.userInfo || {})
 const roleLabel = computed(() => (user.value.roleCode === 'OWNER' ? '所有者' : '成员'))
@@ -204,6 +236,14 @@ async function saveTagIcon(tag, icon) {
   message.success('标签图标已更新')
 }
 
+async function loadPhotoStatus() {
+  try {
+    photoStatus.value = await immichApi.status()
+  } catch {
+    photoStatus.value = { enabled: false, available: false, message: '' }
+  }
+}
+
 async function loadSessions() {
   sessionLoading.value = true
   try {
@@ -251,6 +291,7 @@ function onTrashChanged() {
 onMounted(() => {
   loadSessions()
   loadTags()
+  loadPhotoStatus()
 })
 </script>
 
@@ -304,5 +345,11 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.info-text {
+  margin: 0 0 var(--space-2);
+  line-height: 1.8;
+  font-size: 13px;
 }
 </style>

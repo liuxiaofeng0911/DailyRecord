@@ -70,7 +70,7 @@
           </div>
           <div class="photo-actions">
             <a-button :loading="uploading" @click="triggerUpload">上传</a-button>
-            <a-button @click="openImmich">从 Immich 导入</a-button>
+            <a-button @click="openImmich">从照片库导入</a-button>
             <a-button @click="trashOpen = true">
               回收站<span v-if="trashCount" class="trash-count">{{ trashCount }}</span>
             </a-button>
@@ -104,7 +104,7 @@
 
     <a-modal
       v-model:open="immichOpen"
-      title="从 Immich 选择照片"
+      title="从照片库选择照片"
       width="760px"
       :footer="null"
     >
@@ -136,7 +136,7 @@
             <span v-if="asset.imported" class="immich-flag">已导入</span>
           </label>
         </div>
-        <a-empty v-else description="这一天在 Immich 里没有找到照片" />
+        <a-empty v-else description="这一天在照片库里没有找到照片" />
         <div class="row-between" style="margin-top: 16px">
           <span class="muted">已选 {{ selectedAssets.length }} 张</span>
           <a-button
@@ -422,7 +422,7 @@ function setCover(photo) {
 function removePhoto(photo) {
   Modal.confirm({
     title: '删除这张照片？',
-    content: '只移除日记中的引用，不会删除 Immich 里的原文件。',
+    content: '只移除日记中的引用，不会删除照片库里的原文件。',
     okText: '删除',
     okType: 'danger',
     cancelText: '取消',
@@ -461,16 +461,16 @@ async function openImmich() {
   try {
     const status = await immichApi.status()
     if (!status.enabled) {
-      immichMessage.value = 'Immich 未配置，无法导入照片。'
+      immichMessage.value = '照片库未接入，照片仍可正常上传并保存在服务器本机。'
       immichAssets.value = []
       return
     }
     if (!status.available) {
-      immichMessage.value = status.message || 'Immich 暂时不可用，请稍后重试。'
+      immichMessage.value = status.message || '照片库暂时不可用，请稍后重试。'
     }
     immichAssets.value = await immichApi.assets(date.value)
   } catch (error) {
-    immichMessage.value = error?.message || '读取 Immich 失败'
+    immichMessage.value = error?.message || '读取照片库失败'
   } finally {
     immichLoading.value = false
   }

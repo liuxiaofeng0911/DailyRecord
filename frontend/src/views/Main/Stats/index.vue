@@ -42,7 +42,6 @@
       <section class="surface">
         <div class="row-between section-head">
           <strong>月度签到率</strong>
-          <span class="muted">柱高 = 当月记录天数 ÷ 当月自然天数，点击查看该月时间线</span>
         </div>
         <BaseChart
           :option="monthOption"
