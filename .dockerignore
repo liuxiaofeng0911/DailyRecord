@@ -1,0 +1,14 @@
+.git
+.idea
+.vscode
+docs
+logs
+data
+secrets
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.*
+*.md

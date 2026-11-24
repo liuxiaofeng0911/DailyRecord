@@ -1,0 +1,282 @@
+import logging
+from datetime import date, datetime
+
+from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from ..common import codes
+from ..common.exceptions import ApiError, not_found
+from ..common.result import ok
+from ..common.xss import guard as xss_guard
+from ..config import settings
+from ..db import get_db
+from ..deps import UserContext, get_current_user
+from ..models import DailyEntry, Photo
+from ..schemas.entry import PhotoOut
+from ..schemas.photo import (
+    PhotoDeleteRequest,
+    PhotoDescribeRequest,
+    PhotoListRequest,
+    PhotoUpdateRequest,
+    UploadResult,
+)
+from ..services import storage
+from ..services.entry_service import clear_cover
+from ..services.immich import ImmichClient, ImmichError
+from ..services.ollama import OllamaError, describe_image
+from ..services.timeutil import now_shanghai, parse_datetime
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(
+    prefix="/photo",
+    tags=["photo"],
+    dependencies=[Depends(xss_guard), Depends(get_current_user)],
+)
+
+
+@router.post("/upload")
+async def upload(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    form = await request.form()
+    entry_date_raw = form.get("entryDate")
+    taken_at_raw = form.get("takenAt")
+    entry_date: date | None = None
+    if entry_date_raw:
+        try:
+            entry_date = date.fromisoformat(str(entry_date_raw)[:10])
+        except ValueError:
+            raise ApiError(codes.BAD_REQUEST, "entryDate 格式不正确") from None
+
+    uploads = [
+        value
+        for key, value in form.multi_items()
+        if key in ("files", "files[]") and hasattr(value, "filename")
+    ]
+    if not uploads:
+        raise ApiError(codes.BAD_REQUEST, "请选择要上传的文件")
+
+    entry = None
+    if entry_date is not None:
+        entry = db.scalars(
+            select(DailyEntry).where(
+                DailyEntry.user_id == user.id, DailyEntry.entry_date == entry_date
+            )
+        ).first()
+
+    created: list[Photo] = []
+    errors: list[dict] = []
+    explicit_taken = parse_datetime(str(taken_at_raw)) if taken_at_raw else None
+
+    for upload_file in uploads:
+        filename = upload_file.filename or "upload"
+        try:
+            content = await storage.read_upload(upload_file)
+            stored = await storage.store(
+                user_id=user.id,
+                filename=filename,
+                content=content,
+                content_type=upload_file.content_type or "",
+            )
+        except ApiError as exc:
+            errors.append({"filename": filename, "reason": exc.message})
+            continue
+        except ImmichError as exc:
+            errors.append({"filename": filename, "reason": str(exc)})
+            continue
+
+        taken_at = explicit_taken or stored["taken_at"]
+        if entry_date is not None and explicit_taken is None:
+            taken_at = datetime.combine(entry_date, taken_at.time())
+        ai_state = "disabled"
+        if settings.ai_enabled:
+            ai_state = "pending" if stored["media_type"] == "IMAGE" else "unsupported"
+
+        photo = Photo(
+            user_id=user.id,
+            entry_id=entry.id if entry else None,
+            immich_asset_id=stored["immich_asset_id"],
+            storage_kind=stored["storage_kind"],
+            local_path=stored["local_path"],
+            mime_type=stored["mime_type"],
+            media_type=stored["media_type"],
+            taken_at=taken_at,
+            ai_state=ai_state,
+            width=stored["width"],
+            height=stored["height"],
+            duration_ms=stored["duration_ms"],
+            insert_user=user.userid,
+        )
+        db.add(photo)
+        created.append(photo)
+
+    if not created:
+        db.rollback()
+        reason = "；".join(f"{item['filename']}: {item['reason']}" for item in errors)
+        raise ApiError(codes.BAD_REQUEST, reason or "上传失败")
+
+    db.flush()
+    if entry is not None:
+        has_cover = db.scalars(
+            select(Photo).where(Photo.entry_id == entry.id, Photo.is_cover.is_(True))
+        ).first()
+        if has_cover is None and created:
+            created[0].is_cover = True
+    db.commit()
+    return ok(UploadResult(photos=[PhotoOut.model_validate(p) for p in created], errors=errors))
+
+
+@router.post("/list")
+def list_photos(
+    payload: PhotoListRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    stmt = select(Photo).where(Photo.user_id == user.id).order_by(Photo.taken_at.desc())
+    if payload.entry_id:
+        stmt = stmt.where(Photo.entry_id == int(payload.entry_id))
+    if payload.unattached:
+        stmt = stmt.where(Photo.entry_id.is_(None))
+    if payload.start:
+        stmt = stmt.where(Photo.taken_at >= datetime.combine(payload.start, datetime.min.time()))
+    if payload.end:
+        stmt = stmt.where(Photo.taken_at <= datetime.combine(payload.end, datetime.max.time()))
+    page_size = min(max(payload.page_size, 1), 200)
+    rows = db.scalars(stmt.limit(page_size)).all()
+    return ok([PhotoOut.model_validate(row) for row in rows])
+
+
+@router.get("/thumbnail/{photo_id}")
+async def thumbnail(
+    photo_id: int,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    photo = db.scalars(
+        select(Photo).where(Photo.id == photo_id, Photo.user_id == user.id)
+    ).first()
+    if photo is None:
+        return JSONResponse(status_code=404, content={"code": 404, "message": "照片不存在"})
+    try:
+        content, mime = await storage.read_bytes(photo, size="preview")
+    except (FileNotFoundError, ImmichError):
+        return JSONResponse(status_code=404, content={"code": 404, "message": "照片文件不存在"})
+    return Response(
+        content=content,
+        media_type=mime,
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
+@router.get("/original/{photo_id}")
+async def original(
+    photo_id: int,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    photo = db.scalars(
+        select(Photo).where(Photo.id == photo_id, Photo.user_id == user.id)
+    ).first()
+    if photo is None:
+        return JSONResponse(status_code=404, content={"code": 404, "message": "照片不存在"})
+    try:
+        content, mime = await storage.read_bytes(photo, size="original")
+    except (FileNotFoundError, ImmichError):
+        return JSONResponse(status_code=404, content={"code": 404, "message": "照片文件不存在"})
+    return Response(content=content, media_type=mime)
+
+
+@router.post("/update")
+def update_photo(
+    payload: PhotoUpdateRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    photo = db.scalars(
+        select(Photo).where(Photo.id == int(payload.id), Photo.user_id == user.id)
+    ).first()
+    if photo is None:
+        raise not_found("照片不存在")
+    if payload.caption is not None:
+        photo.caption = payload.caption.strip()[:1000]
+        photo.caption_source = "manual"
+        photo.ai_state = "manual"
+    if payload.taken_at is not None:
+        photo.taken_at = payload.taken_at
+    if payload.is_cover is not None:
+        if payload.is_cover and photo.entry_id is None:
+            raise ApiError(codes.BAD_REQUEST, "未关联记录的照片不能设为封面")
+        if payload.is_cover:
+            clear_cover(db, photo.entry_id, photo.id)
+        photo.is_cover = payload.is_cover
+    photo.update_user = user.userid
+    photo.update_time = now_shanghai()
+    photo.version = int(photo.version or 0) + 1
+    db.commit()
+    return ok(PhotoOut.model_validate(photo))
+
+
+@router.post("/delete")
+def delete_photo(
+    payload: PhotoDeleteRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    photo = db.scalars(
+        select(Photo).where(Photo.id == int(payload.id), Photo.user_id == user.id)
+    ).first()
+    if photo is None:
+        raise not_found("照片不存在")
+    storage.delete_local(photo)
+    db.delete(photo)
+    db.commit()
+    return ok(None)
+
+
+@router.post("/describe")
+async def describe_photo(
+    payload: PhotoDescribeRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    if not settings.ai_enabled:
+        raise ApiError(codes.AI_DISABLED, "AI 能力未开启")
+    photo = db.scalars(
+        select(Photo).where(Photo.id == int(payload.id), Photo.user_id == user.id)
+    ).first()
+    if photo is None:
+        raise not_found("照片不存在")
+    if photo.media_type != "IMAGE":
+        raise ApiError(codes.AI_DISABLED, "视频暂不支持自动描述")
+    if photo.caption_source == "manual":
+        return ok(PhotoOut.model_validate(photo))
+
+    try:
+        content, _ = await storage.read_bytes(photo, size="preview")
+        note_hint = ""
+        if photo.entry_id:
+            entry = db.get(DailyEntry, photo.entry_id)
+            note_hint = entry.note if entry else ""
+        caption = await describe_image(content, note_hint)
+    except (OllamaError, ImmichError, FileNotFoundError) as exc:
+        photo.ai_state = "failed"
+        photo.ai_attempts = int(photo.ai_attempts or 0) + 1
+        db.commit()
+        raise ApiError(codes.AI_UNAVAILABLE, str(exc)) from exc
+
+    photo.caption = caption[:1000]
+    photo.caption_source = "ai"
+    photo.ai_state = "done"
+    photo.ai_attempts = int(photo.ai_attempts or 0) + 1
+    if settings.immich_write_description and photo.immich_asset_id and settings.immich_enabled:
+        try:
+            await ImmichClient().update_description(photo.immich_asset_id, photo.caption)
+        except ImmichError:
+            pass
+    db.commit()
+    return ok(PhotoOut.model_validate(photo))

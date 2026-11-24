@@ -1,0 +1,67 @@
+@import './theme.less';
+@import './reset.less';
+
+.page {
+  padding: 24px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--app-text-1);
+}
+
+.page-subtitle {
+  color: var(--app-text-3);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.surface {
+  background: var(--app-bg-container);
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.muted {
+  color: var(--app-text-3);
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--app-primary-weak);
+  color: var(--app-primary);
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 14px 14px 84px;
+  }
+
+  .surface {
+    padding: 14px;
+    border-radius: 14px;
+  }
+}

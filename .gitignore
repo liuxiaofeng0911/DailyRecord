@@ -1,0 +1,36 @@
+# env
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# node
+node_modules/
+dist/
+.vite/
+
+# runtime data
+data/
+backend/data/
+backend/test_data/
+test_data/
+logs/
+secrets/
+*.log
+
+# artifacts
+.screenshots/
+
+# editor / os
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
