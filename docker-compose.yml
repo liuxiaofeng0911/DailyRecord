@@ -1,0 +1,103 @@
+name: dailyrecord
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-diary}
+      POSTGRES_USER: ${POSTGRES_USER:-diary}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+      PGTZ: ${APP_TIMEZONE:-Asia/Shanghai}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-diary} -d ${POSTGRES_DB:-diary}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
+  redis:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--appendonly", "yes"]
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-diary}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-diary}
+      REDIS_URL: redis://redis:6379/0
+      TZ: ${TZ:-Asia/Shanghai}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Shanghai}
+      API_PORT: "8000"
+      AUTO_CREATE: "false"
+      DATA_DIR: /data
+    volumes:
+      - apidata:/data
+    expose:
+      - "8000"
+    # 默认不映射到宿主；如需本机调试后端，取消下面两行注释
+    # ports:
+    #   - "127.0.0.1:${API_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      API_UPSTREAM: api:8000
+      IMMICH_UPSTREAM: ${IMMICH_UPSTREAM:-host.docker.internal:2283}
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - api
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:
+  apidata:
+
+networks:
+  backend:
+    driver: bridge

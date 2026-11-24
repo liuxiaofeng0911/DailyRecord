@@ -1,0 +1,56 @@
+.auth-shell {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 600px at 20% 10%, rgba(32, 144, 255, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 80% 90%, rgba(126, 87, 255, 0.16), transparent 60%),
+    var(--app-bg-body);
+}
+
+.auth-card {
+  position: relative;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  padding: 1px;
+  border-radius: 24px;
+  background: linear-gradient(140deg, rgba(32, 144, 255, 0.65), rgba(126, 87, 255, 0.45));
+  box-shadow: var(--app-shadow);
+}
+
+.auth-card-inner {
+  border-radius: 23px;
+  background: var(--app-bg-container);
+  padding: 32px 28px;
+}
+
+.auth-title {
+  margin: 6px 0 2px;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: 0.4px;
+  color: var(--app-text-1);
+}
+
+.auth-subtitle {
+  color: var(--app-text-3);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.auth-actions {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+@media (max-width: 768px) {
+  .auth-card-inner {
+    padding: 24px 18px;
+  }
+}
