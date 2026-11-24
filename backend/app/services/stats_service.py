@@ -1,6 +1,7 @@
 """日历聚合、连续天数与年度统计。"""
 
-from collections import defaultdict
+import calendar as calendar_module
+from collections import Counter, defaultdict
 from datetime import date, timedelta
 
 from sqlalchemy import func, select
@@ -72,10 +73,19 @@ def calendar(db: Session, user_id: int, start: date, end: date) -> dict:
         month_days[entry.entry_date.month] += 1
         month_photos[entry.entry_date.month] += len(active_photos(list(entry.photos)))
 
-    months = [
-        {"month": month, "days": month_days.get(month, 0), "photos": month_photos.get(month, 0)}
-        for month in range(1, 13)
-    ]
+    months = []
+    for month in range(1, 13):
+        days_in_month = calendar_module.monthrange(start.year, month)[1]
+        recorded = month_days.get(month, 0)
+        months.append(
+            {
+                "month": month,
+                "days": recorded,
+                "daysInMonth": days_in_month,
+                "rate": round(recorded / days_in_month, 4) if days_in_month else 0,
+                "photos": month_photos.get(month, 0),
+            }
+        )
 
     all_days = {
         row
@@ -115,11 +125,48 @@ def top_tags(db: Session, user_id: int, start: date, end: date, limit: int = 12)
     return [{"name": name, "count": int(count)} for name, count in rows]
 
 
+def mood_distribution(entries: list[DailyEntry]) -> list[dict]:
+    counter = Counter(entry.mood for entry in entries if entry.mood)
+    total = sum(counter.values())
+    rows = [
+        {
+            "name": name,
+            "count": count,
+            "rate": round(count / total, 4) if total else 0,
+        }
+        for name, count in counter.most_common()
+    ]
+    return rows
+
+
+def recent_days(db: Session, user_id: int, days: int = 30) -> list[dict]:
+    today = today_shanghai()
+    start = today - timedelta(days=days - 1)
+    rows = db.scalars(
+        select(DailyEntry.entry_date).where(
+            DailyEntry.user_id == user_id,
+            DailyEntry.entry_date >= start,
+            DailyEntry.entry_date <= today,
+        )
+    ).all()
+    recorded = set(rows)
+    return [
+        {
+            "date": (start + timedelta(days=offset)).isoformat(),
+            "recorded": (start + timedelta(days=offset)) in recorded,
+        }
+        for offset in range(days)
+    ]
+
+
 def overview(db: Session, user_id: int, start: date, end: date) -> dict:
     data = calendar(db, user_id, start, end)
+    entries = _entries_in_range(db, user_id, start, end)
     return {
         "totals": data["totals"],
         "months": data["months"],
         "days": data["days"],
         "topTags": top_tags(db, user_id, start, end),
+        "moods": mood_distribution(entries),
+        "recentDays": recent_days(db, user_id),
     }
