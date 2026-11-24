@@ -1,5 +1,5 @@
 from .entry import DailyEntry, Tag, entry_tag
-from .ops import InviteCode, LoginLog, UserSession
+from .ops import ChangeLog, InviteCode, LoginLog, UserSession
 from .photo import Photo
 from .summary import DailySummary
 from .system import (
@@ -15,6 +15,7 @@ from .system import (
 )
 
 __all__ = [
+    "ChangeLog",
     "ComUser",
     "DailyEntry",
     "DailySummary",

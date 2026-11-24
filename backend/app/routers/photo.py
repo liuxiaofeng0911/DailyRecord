@@ -25,7 +25,7 @@ from ..schemas.photo import (
     TrashListRequest,
     UploadResult,
 )
-from ..services import photo_service, storage
+from ..services import audit, photo_service, storage
 from ..services.entry_service import clear_cover
 from ..services.immich import ImmichClient, ImmichError
 from ..services.ollama import OllamaError, describe_image
@@ -199,9 +199,36 @@ async def original(
     return Response(content=content, media_type=mime)
 
 
+def _photo_entry(db: Session, photo: Photo) -> DailyEntry | None:
+    return db.get(DailyEntry, photo.entry_id) if photo.entry_id else None
+
+
+def _log_photo(
+    db: Session,
+    photo: Photo,
+    user: UserContext,
+    action: str,
+    changes: list[dict],
+    request: Request,
+) -> None:
+    entry = _photo_entry(db, photo)
+    audit.add_log(
+        db,
+        user=user,
+        action=action,
+        entity_type="PHOTO",
+        changes=changes,
+        entity_id=photo.id,
+        entry=entry,
+        entry_date=entry.entry_date if entry else (photo.taken_at.date() if photo.taken_at else None),
+        request=request,
+    )
+
+
 @router.post("/update")
 def update_photo(
     payload: PhotoUpdateRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
@@ -214,21 +241,58 @@ def update_photo(
     ).first()
     if photo is None:
         raise not_found("照片不存在")
+
+    changes: list[dict] = []
     if payload.caption is not None:
+        before_caption = photo.caption or ""
         photo.caption = payload.caption.strip()[:1000]
         photo.caption_source = "manual"
         photo.ai_state = "manual"
+        if before_caption != photo.caption:
+            changes.append(
+                {
+                    "field": "caption",
+                    "op": "replace",
+                    "before": before_caption,
+                    "after": photo.caption,
+                }
+            )
     if payload.taken_at is not None:
+        before_taken = (
+            photo.taken_at.strftime("%Y-%m-%d %H:%M:%S") if photo.taken_at else None
+        )
         photo.taken_at = payload.taken_at
+        after_taken = photo.taken_at.strftime("%Y-%m-%d %H:%M:%S")
+        if before_taken != after_taken:
+            changes.append(
+                {
+                    "field": "takenAt",
+                    "op": "replace",
+                    "before": before_taken,
+                    "after": after_taken,
+                }
+            )
     if payload.is_cover is not None:
+        before_cover = bool(photo.is_cover)
         if payload.is_cover and photo.entry_id is None:
             raise ApiError(codes.BAD_REQUEST, "未关联记录的照片不能设为封面")
         if payload.is_cover:
             clear_cover(db, photo.entry_id, photo.id)
         photo.is_cover = payload.is_cover
+        if before_cover != photo.is_cover:
+            changes.append(
+                {
+                    "field": "cover",
+                    "op": "replace",
+                    "before": before_cover,
+                    "after": photo.is_cover,
+                }
+            )
     photo.update_user = user.userid
     photo.update_time = now_shanghai()
     photo.version = int(photo.version or 0) + 1
+    if changes:
+        _log_photo(db, photo, user, "UPDATE", changes, request)
     db.commit()
     return ok(PhotoOut.model_validate(photo))
 
@@ -236,6 +300,7 @@ def update_photo(
 @router.post("/delete")
 def delete_photo(
     payload: PhotoDeleteRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
@@ -249,8 +314,24 @@ def delete_photo(
     if photo is None:
         raise not_found("照片不存在")
     photo_service.soft_delete(db, photo, user.userid)
+    item = photo_service.trash_item(photo, db)
+    _log_photo(
+        db,
+        photo,
+        user,
+        "TRASH",
+        [
+            {
+                "field": "photo",
+                "op": "trash",
+                "mediaType": photo.media_type,
+                "purgeAfter": item["purgeAfter"],
+            }
+        ],
+        request,
+    )
     db.commit()
-    return ok({"id": str(photo.id), "purgeAfter": photo_service.trash_item(photo, db)["purgeAfter"]})
+    return ok({"id": str(photo.id), "purgeAfter": item["purgeAfter"]})
 
 
 def _photo_scope(user: UserContext):
@@ -288,6 +369,7 @@ def trash_list(
 @router.post("/trash/restore")
 def trash_restore(
     payload: PhotoIdsRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
@@ -304,6 +386,14 @@ def trash_restore(
     found = {photo.id for photo in rows}
     for photo in rows:
         photo_service.restore(db, photo, user.userid)
+        _log_photo(
+            db,
+            photo,
+            user,
+            "RESTORE",
+            [{"field": "photo", "op": "restore", "mediaType": photo.media_type}],
+            request,
+        )
         restored.append(str(photo.id))
     for photo_id in ids:
         if photo_id not in found:
@@ -315,6 +405,7 @@ def trash_restore(
 @router.post("/trash/purge")
 async def trash_purge(
     payload: PhotoIdsRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
@@ -332,6 +423,21 @@ async def trash_purge(
     failed: list[dict] = []
     found = {photo.id for photo in rows}
     for photo in rows:
+        _log_photo(
+            db,
+            photo,
+            user,
+            "PURGE",
+            [
+                {
+                    "field": "photo",
+                    "op": "purge",
+                    "mediaType": photo.media_type,
+                    "origin": photo.origin,
+                }
+            ],
+            request,
+        )
         await photo_service.purge_photo(db, photo)
         purged.append(str(photo.id))
     for photo_id in ids:

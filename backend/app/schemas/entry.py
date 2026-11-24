@@ -38,6 +38,7 @@ class EntryOut(CamelModel):
     photos: list[PhotoOut] = Field(default_factory=list)
     version: int
     update_time: DateTimeStr
+    changed_fields: list[str] = Field(default_factory=list)
 
 
 class EntryGetRequest(CamelModel):
@@ -57,6 +58,13 @@ class EntrySaveRequest(CamelModel):
 
 class EntryDeleteRequest(CamelModel):
     entry_date: date
+
+
+class EntryHistoryRequest(CamelModel):
+    entry_date: date
+    page: dict | None = None
+    page_number: int | None = None
+    page_size: int | None = None
 
 
 class EntryListRequest(CamelModel):

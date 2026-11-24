@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, DateTime, String, Text
+from sqlalchemy import JSON, BigInteger, Date, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..common.snowflake import next_id
@@ -46,3 +46,26 @@ class InviteCode(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     insert_time: Mapped[datetime] = mapped_column(DateTime, default=now_shanghai)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ChangeLog(Base):
+    """修改留痕：只追加，不提供更新与删除接口。"""
+
+    __tablename__ = "dr_change_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    operator_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    operator_name: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    entity_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    entity_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    entry_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    entry_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    changes: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=now_shanghai, nullable=False, index=True
+    )
