@@ -6,8 +6,8 @@
     </div>
     <div class="auth-card">
       <div class="auth-card-inner">
-        <div class="logo">日</div>
-        <h1 class="auth-title">每日照片记录</h1>
+        <div class="logo"><AppIcon name="lucide:calendar-heart" :size="24" /></div>
+        <h1 class="auth-title">每日记录</h1>
         <p class="auth-subtitle">每天一张照片，一句记忆点。登录后继续今天的记录。</p>
 
         <a-form layout="vertical" @submit.prevent="submit">
@@ -50,6 +50,7 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
+import AppIcon from '@/components/AppIcon.vue'
 import FloatingLines from '@/components/FloatingLines.vue'
 import ThemeSelect from '@/components/ThemeSelect.vue'
 
@@ -91,11 +92,10 @@ async function submit() {
   width: 46px;
   height: 46px;
   border-radius: 14px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
-  font-size: 20px;
-  font-weight: 700;
   background: linear-gradient(135deg, #2090ff, #7e57ff);
   margin-bottom: 14px;
 }

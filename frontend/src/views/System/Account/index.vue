@@ -57,6 +57,37 @@
 
     <section class="surface">
       <div class="row-between section-head">
+        <strong>标签图标</strong>
+        <span class="muted tag-hint">自动匹配，可手动覆盖</span>
+      </div>
+      <a-spin :spinning="tagLoading">
+        <div v-if="tags.length" class="tag-icon-list">
+          <div v-for="tag in tags" :key="tag.id" class="tag-icon-row">
+            <span class="tag-icon-name">
+              <AppIcon :name="resolveTagIcon(tag.name, tag.icon)" :size="16" />
+              {{ tag.name }}
+            </span>
+            <a-select
+              :value="tag.icon || resolveTagIcon(tag.name)"
+              :options="tagOptions(tag)"
+              style="width: 180px"
+              @change="saveTagIcon(tag, $event)"
+            >
+              <template #option="{ value }">
+                <span class="icon-option">
+                  <AppIcon :name="value" :size="16" />
+                  {{ iconLabel(value) }}
+                </span>
+              </template>
+            </a-select>
+          </div>
+        </div>
+        <a-empty v-else description="保存带标签的记录后，可在这里调整图标" />
+      </a-spin>
+    </section>
+
+    <section class="surface">
+      <div class="row-between section-head">
         <strong>照片回收站</strong>
         <a-button size="small" @click="trashOpen = true">打开回收站</a-button>
       </div>
@@ -84,9 +115,11 @@ import { Modal, message } from 'antdv-next'
 import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 
-import { authApi, exportApi } from '@/api/api'
+import { authApi, exportApi, tagApi } from '@/api/api'
+import AppIcon from '@/components/AppIcon.vue'
 import EditPwdModal from '@/components/EditPwdModal.vue'
 import TrashDrawer from '@/components/TrashDrawer.vue'
+import { TAG_ICON_OPTIONS, resolveTagIcon } from '@/store/icon'
 import { downloadText } from '@/utils'
 
 const store = useStore()
@@ -95,6 +128,8 @@ const trashOpen = ref(false)
 const sessions = ref([])
 const sessionLoading = ref(false)
 const exporting = ref('')
+const tags = ref([])
+const tagLoading = ref(false)
 
 const user = computed(() => store.state.auth.userInfo || {})
 const roleLabel = computed(() => (user.value.roleCode === 'OWNER' ? '所有者' : '成员'))
@@ -106,6 +141,66 @@ const sessionColumns = [
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 170 },
   { title: '操作', key: 'action', width: 90 },
 ]
+
+const ICON_LABELS = {
+  'lucide:footprints': '散步',
+  'lucide:utensils': '美食',
+  'lucide:plane': '旅行',
+  'lucide:book-open': '阅读',
+  'lucide:dumbbell': '运动',
+  'lucide:users': '家人',
+  'lucide:briefcase': '工作',
+  'lucide:music': '音乐',
+  'lucide:film': '电影',
+  'lucide:cloud-sun': '天气',
+  'lucide:coffee': '咖啡',
+  'lucide:shopping-bag': '购物',
+  'lucide:cat': '宠物',
+  'lucide:pen-line': '记录',
+  'lucide:leaf': '自然',
+  'lucide:heart': '心情',
+  'lucide:map-pin': '地点',
+  'lucide:sun': '阳光',
+  'lucide:star': '星星',
+  'lucide:cloud': '云朵',
+  'lucide:flower-2': '花草',
+  'lucide:compass': '探索',
+  'lucide:moon': '夜晚',
+  'lucide:camera': '拍照',
+  'lucide:clock': '时间',
+  'lucide:sparkles': '灵感',
+}
+
+const iconOptions = TAG_ICON_OPTIONS.map((value) => ({
+  value,
+  label: ICON_LABELS[value] || value,
+}))
+
+function iconLabel(value) {
+  return ICON_LABELS[value] || value
+}
+
+function tagOptions(tag) {
+  const current = tag.icon || resolveTagIcon(tag.name)
+  if (TAG_ICON_OPTIONS.includes(current)) return iconOptions
+  return [{ value: current, label: iconLabel(current) }, ...iconOptions]
+}
+
+async function loadTags() {
+  tagLoading.value = true
+  try {
+    tags.value = (await tagApi.list()) || []
+  } finally {
+    tagLoading.value = false
+  }
+}
+
+async function saveTagIcon(tag, icon) {
+  const saved = await tagApi.save({ id: tag.id, icon })
+  tags.value = tags.value.map((item) => (item.id === tag.id ? saved : item))
+  store.commit('app/bumpDataVersion', ['entries'])
+  message.success('标签图标已更新')
+}
 
 async function loadSessions() {
   sessionLoading.value = true
@@ -151,14 +246,17 @@ function onTrashChanged() {
   store.commit('app/bumpDataVersion', ['entries', 'stats'])
 }
 
-onMounted(loadSessions)
+onMounted(() => {
+  loadSessions()
+  loadTags()
+})
 </script>
 
 <style scoped lang="less">
 .account-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-5);
 }
 
 .section-head {
@@ -173,5 +271,36 @@ onMounted(loadSessions)
 .trash-hint {
   margin: 0;
   font-size: 12px;
+}
+
+.tag-hint {
+  font-size: 12px;
+}
+
+.tag-icon-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tag-icon-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+.tag-icon-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--app-text-1);
+}
+
+.icon-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 </style>

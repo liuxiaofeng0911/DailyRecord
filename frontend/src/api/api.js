@@ -44,6 +44,11 @@ export const statsApi = {
   overview: (year) => Post('/stats/overview', { year }),
 }
 
+export const tagApi = {
+  list: () => Post('/tag/list'),
+  save: (payload) => Post('/tag/save', payload),
+}
+
 export const exportApi = {
   run: (payload) => Post('/export', payload),
 }

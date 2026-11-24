@@ -40,7 +40,14 @@
             placeholder="今天的心情"
             allow-clear
             style="min-width: 160px"
-          />
+          >
+            <template #option="{ value }">
+              <span class="mood-option">
+                <AppIcon :name="resolveMoodIcon(value)" :size="16" />
+                {{ value }}
+              </span>
+            </template>
+          </a-select>
         </div>
         <div class="meta-item grow">
           <span class="meta-label">标签</span>
@@ -157,10 +164,12 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
 import { entryApi, immichApi, photoApi } from '@/api/api'
+import AppIcon from '@/components/AppIcon.vue'
 import PhotoGrid from '@/components/PhotoGrid.vue'
 import HistoryDrawer from '@/components/HistoryDrawer.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import TrashDrawer from '@/components/TrashDrawer.vue'
+import { resolveMoodIcon } from '@/store/icon'
 import { draftKey, relativeDay, today } from '@/utils'
 
 defineOptions({ name: 'Today' })
@@ -521,7 +530,7 @@ onBeforeUnmount(() => {
 .today-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-5);
 }
 
 .today-header {
@@ -576,6 +585,12 @@ onBeforeUnmount(() => {
   color: var(--app-text-3);
   font-size: 13px;
   white-space: nowrap;
+}
+
+.mood-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .photo-hint {

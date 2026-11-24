@@ -10,8 +10,8 @@
       class="app-sider"
     >
       <div class="brand">
-        <div class="brand-mark">日</div>
-        <span v-if="!collapsed" class="brand-name">每日照片记录</span>
+        <span class="brand-mark"><AppIcon name="lucide:calendar-heart" :size="17" /></span>
+        <span v-if="!collapsed" class="brand-name">每日记录</span>
       </div>
       <a-menu
         :selected-keys="selectedKeys"
@@ -39,8 +39,11 @@
         <div class="header-right">
           <ThemeSelect />
           <a-dropdown :menu="userMenu" trigger="click">
-            <button type="button" class="user-button">
-              <span class="avatar">{{ initial }}</span>
+            <button type="button" class="user-button" :aria-label="`${username} 的菜单`">
+              <span class="avatar" role="img" :aria-label="`${username}头像`">
+                <img v-if="avatarUrl" :src="avatarUrl" alt="" />
+                <template v-else>{{ initial }}</template>
+              </span>
               <span v-if="!mobile" class="user-name">{{ username }}</span>
             </button>
           </a-dropdown>
@@ -64,7 +67,7 @@
         :class="{ active: selectedKeys.includes(item.key) }"
         @click="router.push(item.path)"
       >
-        <span class="tab-dot" />
+        <AppIcon :name="resolveNavIcon(item.key)" :size="18" />
         {{ item.label }}
       </button>
     </nav>
@@ -72,11 +75,13 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
+import AppIcon from '@/components/AppIcon.vue'
 import ThemeSelect from '@/components/ThemeSelect.vue'
+import { resolveNavIcon } from '@/store/icon'
 
 const store = useStore()
 const router = useRouter()
@@ -89,6 +94,7 @@ const collapsed = computed({
 const mobile = computed(() => store.state.app.mobile)
 const username = computed(() => store.state.auth.userInfo?.username || '我')
 const initial = computed(() => (username.value || '我').slice(0, 1))
+const avatarUrl = computed(() => store.state.auth.userInfo?.avatar || '')
 const pageTitle = computed(() => route.meta?.title || '今天')
 
 const selectedKeys = computed(() => {
@@ -100,27 +106,36 @@ const selectedKeys = computed(() => {
 
 const isOwner = computed(() => store.getters['auth/isOwner'])
 
+function menuIcon(path) {
+  return h(AppIcon, { name: resolveNavIcon(path), size: 18 })
+}
+
 const menuItems = computed(() => {
   const items = [
-    { key: '/Main/Today', label: '今天' },
-    { key: '/Main/Timeline', label: '时间线' },
-    { key: '/Main/Stats', label: '统计' },
+    { key: '/Main/Today', label: '今天', icon: menuIcon('/Main/Today') },
+    { key: '/Main/Timeline', label: '时间线', icon: menuIcon('/Main/Timeline') },
+    { key: '/Main/Stats', label: '统计', icon: menuIcon('/Main/Stats') },
   ]
   if (!isOwner.value) {
     // 普通成员只保留账户设置，不展示系统管理分组
-    items.push({ key: '/System/Account', label: '账户设置' })
+    items.push({ key: '/System/Account', label: '账户设置', icon: menuIcon('/System/Account') })
     return items
   }
   items.push({
     key: 'system',
     label: '系统管理',
+    icon: h(AppIcon, { name: 'lucide:settings', size: 18 }),
     children: [
-      { key: '/System/Account', label: '账户设置' },
-      { key: '/System/Settings', label: '系统设置' },
-      { key: '/System/User', label: '用户管理' },
-      { key: '/System/Role', label: '角色管理' },
-      { key: '/System/Organization', label: '组织管理' },
-      { key: '/System/BaseCode', label: '字典管理' },
+      { key: '/System/Account', label: '账户设置', icon: menuIcon('/System/Account') },
+      { key: '/System/Settings', label: '系统设置', icon: menuIcon('/System/Settings') },
+      { key: '/System/User', label: '用户管理', icon: menuIcon('/System/User') },
+      { key: '/System/Role', label: '角色管理', icon: menuIcon('/System/Role') },
+      {
+        key: '/System/Organization',
+        label: '组织管理',
+        icon: menuIcon('/System/Organization'),
+      },
+      { key: '/System/BaseCode', label: '字典管理', icon: menuIcon('/System/BaseCode') },
     ],
   })
   return items
@@ -200,10 +215,10 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   border-radius: 9px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
-  font-weight: 700;
   background: linear-gradient(135deg, #2090ff, #7e57ff);
 }
 
@@ -215,8 +230,8 @@ onBeforeUnmount(() => {
 }
 
 .app-header {
-  height: 50px;
-  line-height: 50px;
+  height: 56px;
+  line-height: 1;
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -246,34 +261,57 @@ onBeforeUnmount(() => {
 }
 
 .user-button {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
+  padding: 4px 8px;
   border: none;
+  border-radius: var(--radius-pill);
   background: transparent;
   cursor: pointer;
   color: var(--app-text-1);
+  line-height: 1;
+  transition: background 0.2s;
+
+  &:hover {
+    background: var(--app-bg-elevated);
+  }
 }
 
 .avatar {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  flex: none;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--app-primary-weak);
-  color: var(--app-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--app-primary), #7e57ff);
+  color: #fff;
   font-size: 13px;
   font-weight: 600;
+
+  img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
 }
 
 .user-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
 }
 
 .app-content {
   background: var(--app-bg-body);
-  min-height: calc(100vh - 50px);
+  min-height: calc(100vh - 56px);
 }
 
 .mobile-tabs {
@@ -303,12 +341,5 @@ onBeforeUnmount(() => {
       color: var(--app-primary);
     }
   }
-}
-
-.tab-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
 }
 </style>

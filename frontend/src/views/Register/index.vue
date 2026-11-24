@@ -6,7 +6,7 @@
     </div>
     <div class="auth-card">
       <div class="auth-card-inner">
-        <div class="logo">日</div>
+        <div class="logo"><AppIcon name="lucide:calendar-heart" :size="24" /></div>
         <h1 class="auth-title">创建账号</h1>
         <p class="auth-subtitle">第一个注册的账号将成为系统所有者；之后的注册需要管理员开启注册。</p>
 
@@ -70,6 +70,7 @@ import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
 import { authApi } from '@/api/api'
+import AppIcon from '@/components/AppIcon.vue'
 import FloatingLines from '@/components/FloatingLines.vue'
 import ThemeSelect from '@/components/ThemeSelect.vue'
 
@@ -138,11 +139,10 @@ async function submit() {
   width: 46px;
   height: 46px;
   border-radius: 14px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
-  font-size: 20px;
-  font-weight: 700;
   background: linear-gradient(135deg, #2090ff, #7e57ff);
   margin-bottom: 14px;
 }

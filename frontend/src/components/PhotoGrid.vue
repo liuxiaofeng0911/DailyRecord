@@ -10,11 +10,13 @@
       <div v-if="photo.isCover" class="badge cover-badge">封面</div>
       <div v-if="editable" class="photo-actions">
         <a-tooltip title="设为封面">
-          <button type="button" aria-label="设为封面" @click="$emit('cover', photo)">封</button>
+          <button type="button" aria-label="设为封面" @click="$emit('cover', photo)">
+            <AppIcon name="lucide:star" :size="15" />
+          </button>
         </a-tooltip>
         <a-tooltip title="删除引用">
           <button type="button" aria-label="删除引用" class="danger" @click="$emit('remove', photo)">
-            删
+            <AppIcon name="lucide:trash-2" :size="15" />
           </button>
         </a-tooltip>
       </div>
@@ -26,6 +28,7 @@
 
 <script setup>
 import { photoApi } from '@/api/api'
+import AppIcon from '@/components/AppIcon.vue'
 
 defineProps({
   photos: { type: Array, default: () => [] },
