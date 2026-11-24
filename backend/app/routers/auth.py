@@ -32,7 +32,7 @@ from ..security.password import (
     validate_password_strength,
     verify_password,
 )
-from ..services import ratelimit
+from ..services import menu_service, ratelimit
 from ..services.auth_service import (
     client_ip,
     create_session_token,
@@ -276,7 +276,13 @@ def logout(
 def me(db: Session = Depends(get_db), user: UserContext = Depends(get_current_user)):
     entity = db.get(ComUser, user.id)
     switches = {row.switch_key: row.enabled for row in db.scalars(select(Switch)).all()}
-    return ok(MeData(user_info=_user_info(db, entity, user.role_code), switches=switches))
+    return ok(
+        MeData(
+            user_info=_user_info(db, entity, user.role_code),
+            switches=switches,
+            menus=menu_service.menu_tree_for_user(db, user.id, user.is_owner),
+        )
+    )
 
 
 @router.post("/changePassword")

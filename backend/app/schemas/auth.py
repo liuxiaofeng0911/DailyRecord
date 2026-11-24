@@ -56,3 +56,4 @@ class SessionOut(CamelModel):
 class MeData(CamelModel):
     user_info: UserInfo
     switches: dict[str, str] = Field(default_factory=dict)
+    menus: list[dict] = Field(default_factory=list)

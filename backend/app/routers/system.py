@@ -11,13 +11,30 @@ from ..common.result import ok
 from ..common.xss import guard as xss_guard
 from ..db import get_db
 from ..deps import UserContext, get_current_user, require_owner
-from ..models import ComUser, GeneralCode, Org, Role, Switch, UserOrg, UserRole, UserSession
+from ..models import (
+    ComUser,
+    GeneralCode,
+    Org,
+    Resource,
+    Role,
+    RoleResource,
+    Switch,
+    UserOrg,
+    UserRole,
+    UserSession,
+)
 from ..schemas.system import (
     DictListRequest,
     DictOut,
     DictSaveRequest,
+    MenuIdRequest,
+    MenuSaveRequest,
+    OrgIdRequest,
     OrgOut,
+    OrgSaveRequest,
     ResetPasswordRequest,
+    RoleMenusRequest,
+    RoleMenusSaveRequest,
     RoleOut,
     RoleSaveRequest,
     SwitchSaveRequest,
@@ -27,6 +44,7 @@ from ..schemas.system import (
 )
 from ..security import rsa
 from ..security.password import hash_password, validate_password_strength
+from ..services import menu_service
 from ..services.auth_service import revoke_all_sessions, role_code_of
 from ..services.bootstrap import has_users
 from ..services.timeutil import now_shanghai
@@ -303,7 +321,7 @@ def org_tree(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
-    rows = db.scalars(select(Org).order_by(Org.id.asc())).all()
+    rows = db.scalars(select(Org).order_by(Org.pid.asc(), Org.id.asc())).all()
     data = [
         OrgOut(
             id=row.id,
@@ -311,10 +329,217 @@ def org_tree(
             org_name=row.org_name,
             status=row.status,
             pid=str(row.pid or 0),
+            remark=row.remark,
         )
         for row in rows
     ]
     return ok(data)
+
+
+def _org_would_cycle(db: Session, org_id: int, pid: int) -> bool:
+    cursor = pid
+    guard = 0
+    while cursor and guard < 50:
+        if cursor == org_id:
+            return True
+        parent = db.get(Org, cursor)
+        if parent is None:
+            break
+        cursor = parent.pid
+        guard += 1
+    return False
+
+
+@router.post("/org/save")
+def org_save(
+    payload: OrgSaveRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    code = payload.org_code.strip()
+    name = payload.org_name.strip()
+    pid = int(payload.pid or 0)
+    if pid != 0 and db.get(Org, pid) is None:
+        raise bad_request("上级组织不存在")
+    duplicated = db.scalars(
+        select(Org).where(func.lower(Org.org_code) == code.lower())
+    ).all()
+    if payload.id:
+        entity = db.get(Org, int(payload.id))
+        if entity is None:
+            raise not_found("组织不存在")
+        if pid == entity.id or _org_would_cycle(db, entity.id, pid):
+            raise bad_request("上级组织不能是自身或自己的下级")
+        if any(row.id != entity.id for row in duplicated):
+            raise ApiError(codes.DUPLICATE_REGISTER, "组织编码已存在")
+        entity.org_code = code
+        entity.org_name = name
+        entity.pid = pid
+        entity.status = payload.status
+        entity.remark = payload.remark
+        entity.update_user = user.userid
+        entity.update_time = now_shanghai()
+    else:
+        if duplicated:
+            raise ApiError(codes.DUPLICATE_REGISTER, "组织编码已存在")
+        entity = Org(
+            org_code=code,
+            org_name=name,
+            pid=pid,
+            status=payload.status,
+            remark=payload.remark,
+            insert_user=user.userid,
+        )
+        db.add(entity)
+    db.commit()
+    return ok({"id": str(entity.id)})
+
+
+@router.post("/org/delete")
+def org_delete(
+    payload: OrgIdRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    org_id = int(payload.id)
+    entity = db.get(Org, org_id)
+    if entity is None:
+        raise not_found("组织不存在")
+    if org_id == 1:
+        raise forbidden("默认组织不可删除")
+    if db.scalar(select(Org.id).where(Org.pid == org_id).limit(1)) is not None:
+        raise bad_request("请先处理该组织的下级组织")
+    if (
+        db.scalar(
+            select(UserOrg.id).where(UserOrg.company_id == str(org_id)).limit(1)
+        )
+        is not None
+    ):
+        raise bad_request("该组织下仍有用户，不能删除")
+    db.delete(entity)
+    db.commit()
+    return ok(None, "组织已删除")
+
+
+@router.post("/menu/tree")
+def menu_tree(
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    return ok(menu_service.full_tree(db))
+
+
+def _menu_would_cycle(db: Session, menu_id: int, pid: int) -> bool:
+    cursor = pid
+    guard = 0
+    while cursor and guard < 50:
+        if cursor == menu_id:
+            return True
+        parent = db.get(Resource, cursor)
+        if parent is None:
+            break
+        cursor = parent.pid
+        guard += 1
+    return False
+
+
+@router.post("/menu/save")
+def menu_save(
+    payload: MenuSaveRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    name = payload.name.strip()
+    path = (payload.path or "").strip()
+    pid = int(payload.pid or 0)
+    if path and not path.startswith("/"):
+        raise bad_request("菜单路径需以 / 开头")
+    if pid != 0 and db.get(Resource, pid) is None:
+        raise bad_request("上级菜单不存在")
+    menu_id = int(payload.id) if payload.id else None
+    if menu_id and (pid == menu_id or _menu_would_cycle(db, menu_id, pid)):
+        raise bad_request("上级菜单不能是自身或自己的下级")
+    if path:
+        duplicated = db.scalars(
+            select(Resource).where(Resource.web_url == path)
+        ).all()
+        if any(row.id != menu_id for row in duplicated):
+            raise bad_request("菜单路径已存在")
+
+    if menu_id:
+        entity = db.get(Resource, menu_id)
+        if entity is None:
+            raise not_found("菜单不存在")
+        entity.name = name
+        entity.web_url = path
+        entity.icon_name = (payload.icon or "").strip() or None
+        entity.pid = pid
+        entity.sort = payload.sort
+        entity.enable = payload.enable
+        entity.update_time = now_shanghai()
+    else:
+        entity = Resource(
+            name=name,
+            web_url=path,
+            icon_name=(payload.icon or "").strip() or None,
+            pid=pid,
+            sort=payload.sort,
+            enable=payload.enable,
+        )
+        db.add(entity)
+    db.commit()
+    return ok({"id": str(entity.id)})
+
+
+@router.post("/menu/delete")
+def menu_delete(
+    payload: MenuIdRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    menu_id = int(payload.id)
+    entity = db.get(Resource, menu_id)
+    if entity is None:
+        raise not_found("菜单不存在")
+    if db.scalar(select(Resource.id).where(Resource.pid == menu_id).limit(1)) is not None:
+        raise bad_request("请先删除该菜单下的子菜单")
+    for row in db.scalars(
+        select(RoleResource).where(RoleResource.resource_id == menu_id)
+    ).all():
+        db.delete(row)
+    db.delete(entity)
+    db.commit()
+    return ok(None, "菜单已删除")
+
+
+@router.post("/role/menus")
+def role_menus(
+    payload: RoleMenusRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    role_id = int(payload.role_id)
+    if db.get(Role, role_id) is None:
+        raise not_found("角色不存在")
+    return ok(menu_service.role_menu_ids(db, role_id))
+
+
+@router.post("/role/menus/save")
+def role_menus_save(
+    payload: RoleMenusSaveRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    role_id = int(payload.role_id)
+    role = db.get(Role, role_id)
+    if role is None:
+        raise not_found("角色不存在")
+    if role.code == "OWNER":
+        raise forbidden("所有者固定拥有全部菜单")
+    ids = [int(item) for item in payload.menu_ids]
+    menu_service.save_role_menus(db, role_id, ids)
+    db.commit()
+    return ok(menu_service.role_menu_ids(db, role_id))
 
 
 @router.post("/dict/list")
