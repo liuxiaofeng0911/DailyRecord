@@ -24,7 +24,13 @@ from ..schemas.entry import (
 )
 from ..schemas.stats import CalendarRequest
 from ..services import stats_service
-from ..services.entry_service import attach_photos, clear_cover, normalize_tags, resolve_tags
+from ..services.entry_service import (
+    active_photos,
+    attach_photos,
+    clear_cover,
+    normalize_tags,
+    resolve_tags,
+)
 from ..services.timeutil import now_shanghai, today_shanghai
 
 logger = logging.getLogger(__name__)
@@ -61,7 +67,9 @@ def _serialize(entry: DailyEntry) -> EntryOut:
         tags=[TagOut(id=tag.id, name=tag.name, kind=tag.kind) for tag in entry.tags],
         photos=[
             PhotoOut.model_validate(photo)
-            for photo in sorted(entry.photos, key=lambda item: item.taken_at or now_shanghai())
+            for photo in sorted(
+                active_photos(list(entry.photos)), key=lambda item: item.taken_at or now_shanghai()
+            )
         ],
         version=entry.version or 0,
         update_time=entry.update_time,
@@ -249,7 +257,7 @@ def delete_entry(
     entry = _load_entry(db, user.id, payload.entry_date)
     if entry is None:
         raise not_found("记录不存在")
-    for photo in entry.photos:
+    for photo in active_photos(list(entry.photos)):
         photo.entry_id = None
         photo.is_cover = False
     db.delete(entry)

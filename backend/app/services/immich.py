@@ -87,6 +87,9 @@ class ImmichClient:
             "PUT", "/api/assets", json={"ids": [asset_id], "description": description}
         )
 
+    async def delete_asset(self, asset_id: str) -> None:
+        await self._request("DELETE", "/api/assets", json={"ids": [asset_id]})
+
     async def upload_asset(
         self, filename: str, content: bytes, mime_type: str, taken_at: datetime
     ) -> dict:

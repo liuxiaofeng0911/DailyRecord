@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import DailyEntry, Tag, entry_tag
+from .entry_service import active_photos
 from .timeutil import today_shanghai
 
 
@@ -49,11 +50,12 @@ def _entries_in_range(db: Session, user_id: int, start: date, end: date) -> list
 
 
 def _day_row(entry: DailyEntry) -> dict:
-    cover = next((photo.id for photo in entry.photos if photo.is_cover), None)
+    photos = active_photos(list(entry.photos))
+    cover = next((photo.id for photo in photos if photo.is_cover), None)
     return {
         "date": entry.entry_date.isoformat(),
         "hasEntry": True,
-        "photos": len(entry.photos),
+        "photos": len(photos),
         "mood": entry.mood,
         "tags": [tag.name for tag in entry.tags],
         "coverPhotoId": str(cover) if cover else None,
@@ -68,7 +70,7 @@ def calendar(db: Session, user_id: int, start: date, end: date) -> dict:
     month_photos: dict[int, int] = defaultdict(int)
     for entry in entries:
         month_days[entry.entry_date.month] += 1
-        month_photos[entry.entry_date.month] += len(entry.photos)
+        month_photos[entry.entry_date.month] += len(active_photos(list(entry.photos)))
 
     months = [
         {"month": month, "days": month_days.get(month, 0), "photos": month_photos.get(month, 0)}
@@ -88,7 +90,7 @@ def calendar(db: Session, user_id: int, start: date, end: date) -> dict:
         "months": months,
         "totals": {
             "days": len(days),
-            "photos": sum(len(entry.photos) for entry in entries),
+            "photos": sum(len(active_photos(list(entry.photos))) for entry in entries),
             "currentStreak": current_streak,
             "longestStreak": longest_streak,
         },

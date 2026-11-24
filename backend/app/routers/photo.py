@@ -3,11 +3,12 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..common import codes
 from ..common.exceptions import ApiError, not_found
+from ..common.page import MAX_PAGE_SIZE, page_payload
 from ..common.result import ok
 from ..common.xss import guard as xss_guard
 from ..config import settings
@@ -18,11 +19,13 @@ from ..schemas.entry import PhotoOut
 from ..schemas.photo import (
     PhotoDeleteRequest,
     PhotoDescribeRequest,
+    PhotoIdsRequest,
     PhotoListRequest,
     PhotoUpdateRequest,
+    TrashListRequest,
     UploadResult,
 )
-from ..services import storage
+from ..services import photo_service, storage
 from ..services.entry_service import clear_cover
 from ..services.immich import ImmichClient, ImmichError
 from ..services.ollama import OllamaError, describe_image
@@ -105,6 +108,7 @@ async def upload(
             local_path=stored["local_path"],
             mime_type=stored["mime_type"],
             media_type=stored["media_type"],
+            origin="upload",
             taken_at=taken_at,
             ai_state=ai_state,
             width=stored["width"],
@@ -137,7 +141,11 @@ def list_photos(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
-    stmt = select(Photo).where(Photo.user_id == user.id).order_by(Photo.taken_at.desc())
+    stmt = (
+        select(Photo)
+        .where(Photo.user_id == user.id, Photo.deleted_at.is_(None))
+        .order_by(Photo.taken_at.desc())
+    )
     if payload.entry_id:
         stmt = stmt.where(Photo.entry_id == int(payload.entry_id))
     if payload.unattached:
@@ -198,7 +206,11 @@ def update_photo(
     user: UserContext = Depends(get_current_user),
 ):
     photo = db.scalars(
-        select(Photo).where(Photo.id == int(payload.id), Photo.user_id == user.id)
+        select(Photo).where(
+            Photo.id == int(payload.id),
+            Photo.user_id == user.id,
+            Photo.deleted_at.is_(None),
+        )
     ).first()
     if photo is None:
         raise not_found("照片不存在")
@@ -228,14 +240,105 @@ def delete_photo(
     user: UserContext = Depends(get_current_user),
 ):
     photo = db.scalars(
-        select(Photo).where(Photo.id == int(payload.id), Photo.user_id == user.id)
+        select(Photo).where(
+            Photo.id == int(payload.id),
+            Photo.user_id == user.id,
+            Photo.deleted_at.is_(None),
+        )
     ).first()
     if photo is None:
         raise not_found("照片不存在")
-    storage.delete_local(photo)
-    db.delete(photo)
+    photo_service.soft_delete(db, photo, user.userid)
     db.commit()
-    return ok(None)
+    return ok({"id": str(photo.id), "purgeAfter": photo_service.trash_item(photo, db)["purgeAfter"]})
+
+
+def _photo_scope(user: UserContext):
+    if user.is_owner:
+        return or_(Photo.user_id == user.id, Photo.user_id.is_not(None))
+    return Photo.user_id == user.id
+
+
+@router.post("/trash/list")
+def trash_list(
+    payload: TrashListRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    page_data = payload.page or {}
+    try:
+        page_number = max(int(page_data.get("pageNumber") or payload.page_number or 1), 1)
+        page_size = min(
+            max(int(page_data.get("pageSize") or payload.page_size or 20), 1), MAX_PAGE_SIZE
+        )
+    except (TypeError, ValueError):
+        raise ApiError(codes.BAD_REQUEST, "分页参数不正确") from None
+
+    base = select(Photo).where(Photo.user_id == user.id, Photo.deleted_at.is_not(None))
+    total = db.scalar(select(func.count()).select_from(base.order_by(None).subquery())) or 0
+    rows = db.scalars(
+        base.order_by(Photo.deleted_at.desc())
+        .offset((page_number - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    items = [photo_service.trash_item(row, db) for row in rows]
+    return ok(page_payload(items, total, page_number, page_size))
+
+
+@router.post("/trash/restore")
+def trash_restore(
+    payload: PhotoIdsRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    ids = [int(item) for item in payload.ids if str(item).isdigit()]
+    if not ids:
+        raise ApiError(codes.BAD_REQUEST, "请选择要恢复的照片")
+    rows = db.scalars(
+        select(Photo).where(
+            Photo.id.in_(ids), _photo_scope(user), Photo.deleted_at.is_not(None)
+        )
+    ).all()
+    restored: list[str] = []
+    failed: list[dict] = []
+    found = {photo.id for photo in rows}
+    for photo in rows:
+        photo_service.restore(db, photo, user.userid)
+        restored.append(str(photo.id))
+    for photo_id in ids:
+        if photo_id not in found:
+            failed.append({"id": str(photo_id), "reason": "照片不存在或不在回收站"})
+    db.commit()
+    return ok({"restored": len(restored), "ids": restored, "failed": failed})
+
+
+@router.post("/trash/purge")
+async def trash_purge(
+    payload: PhotoIdsRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    ids = [int(item) for item in payload.ids if str(item).isdigit()]
+    if not ids:
+        raise ApiError(codes.BAD_REQUEST, "请选择要彻底删除的照片")
+    rows = list(
+        db.scalars(
+            select(Photo).where(
+                Photo.id.in_(ids), _photo_scope(user), Photo.deleted_at.is_not(None)
+            )
+        )
+    )
+    purged: list[str] = []
+    failed: list[dict] = []
+    found = {photo.id for photo in rows}
+    for photo in rows:
+        await photo_service.purge_photo(db, photo)
+        purged.append(str(photo.id))
+    for photo_id in ids:
+        if photo_id not in found:
+            failed.append({"id": str(photo_id), "reason": "照片不存在或不在回收站"})
+    db.commit()
+    return ok({"purged": len(purged), "ids": purged, "failed": failed})
 
 
 @router.post("/describe")

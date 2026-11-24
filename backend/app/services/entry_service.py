@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 MAX_TAGS = 20
 
 
+def active_photos(photos: list[Photo]) -> list[Photo]:
+    """过滤回收站中的照片，展示与计数都只使用在用素材。"""
+    return [photo for photo in photos if photo.deleted_at is None]
+
+
 def normalize_tags(raw_tags: list[str] | None) -> list[str]:
     if not raw_tags:
         return []
@@ -62,16 +67,24 @@ def attach_photos(
     owned = {
         photo.id: photo
         for photo in db.scalars(
-            select(Photo).where(Photo.user_id == user_id, Photo.id.in_(wanted))
+            select(Photo).where(
+                Photo.user_id == user_id,
+                Photo.id.in_(wanted),
+                Photo.deleted_at.is_(None),
+            )
         ).all()
     }
     missing = wanted - owned.keys()
     if missing:
-        logger.warning("忽略不属于当前用户的照片: %s", sorted(missing))
+        logger.warning("忽略不属于当前用户或已在回收站的照片: %s", sorted(missing))
 
     # 先摘除本记录下不再保留的照片
     for photo in db.scalars(
-        select(Photo).where(Photo.entry_id == entry.id, Photo.user_id == user_id)
+        select(Photo).where(
+            Photo.entry_id == entry.id,
+            Photo.user_id == user_id,
+            Photo.deleted_at.is_(None),
+        )
     ).all():
         if photo.id not in wanted:
             photo.entry_id = None

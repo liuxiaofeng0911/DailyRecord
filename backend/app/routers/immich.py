@@ -135,6 +135,7 @@ async def import_assets(
             storage_kind="immich",
             mime_type=item["mime_type"],
             media_type=media_type,
+            origin="import",
             taken_at=item["taken_at"] or now_shanghai(),
             caption=caption[:1000],
             caption_source="immich" if caption else "none",
