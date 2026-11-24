@@ -20,86 +20,88 @@
     </header>
 
     <a-spin :spinning="loading">
-      <section class="surface note-card">
-        <a-textarea
-          v-model:value="note"
-          class="note-input"
-          placeholder="今天想记住什么？"
-          :auto-size="{ minRows: 6, maxRows: 16 }"
-          :maxlength="5000"
-          show-count
-        />
-      </section>
-
-      <section class="surface meta-card">
-        <div class="meta-item">
-          <span class="meta-label">心情</span>
-          <a-select
-            v-model:value="mood"
-            :options="moodOptions"
-            placeholder="今天的心情"
-            allow-clear
-            style="min-width: 160px"
-          >
-            <template #option="{ value }">
-              <span class="mood-option">
-                <AppIcon :name="resolveMoodIcon(value)" :size="16" />
-                {{ value }}
-              </span>
-            </template>
-          </a-select>
-        </div>
-        <div class="meta-item grow">
-          <span class="meta-label">标签</span>
-          <a-select
-            v-model:value="tags"
-            mode="tags"
-            :token-separators="[',', '，', ' ']"
-            placeholder="输入后回车，例如：散步、江边"
-            style="width: 100%"
-            :max-tag-count="8"
+      <div class="page-sections">
+        <section class="surface note-card">
+          <a-textarea
+            v-model:value="note"
+            class="note-input"
+            placeholder="今天想记住什么？"
+            :auto-size="{ minRows: 6, maxRows: 16 }"
+            :maxlength="5000"
+            show-count
           />
-        </div>
-      </section>
+        </section>
 
-      <section class="surface photo-card">
-        <div class="row-between">
-          <div>
-            <strong>照片与视频</strong>
-            <span class="muted photo-hint">共 {{ photos.length }} 个素材</span>
+        <section class="surface meta-card">
+          <div class="meta-item">
+            <span class="meta-label">心情</span>
+            <a-select
+              v-model:value="mood"
+              :options="moodOptions"
+              placeholder="今天的心情"
+              allow-clear
+              style="min-width: 160px"
+            >
+              <template #option="{ value }">
+                <span class="mood-option">
+                  <AppIcon :name="resolveMoodIcon(value)" :size="16" />
+                  {{ value }}
+                </span>
+              </template>
+            </a-select>
           </div>
-          <div class="photo-actions">
-            <a-button :loading="uploading" @click="triggerUpload">上传</a-button>
-            <a-button @click="openImmich">从照片库导入</a-button>
-            <a-button @click="trashOpen = true">
-              回收站<span v-if="trashCount" class="trash-count">{{ trashCount }}</span>
-            </a-button>
+          <div class="meta-item grow">
+            <span class="meta-label">标签</span>
+            <a-select
+              v-model:value="tags"
+              mode="tags"
+              :token-separators="[',', '，', ' ']"
+              placeholder="输入后回车，例如：散步、江边"
+              style="width: 100%"
+              :max-tag-count="8"
+            />
           </div>
-        </div>
-        <p class="muted paste-hint">支持 JPG/PNG/WebP/GIF/HEIC/AVIF 与常见视频；可直接 Ctrl/Cmd+V 粘贴截图</p>
-        <div v-if="uploading" class="upload-progress">
-          <a-progress :percent="uploadPercent" size="small" />
-        </div>
+        </section>
 
-        <PhotoGrid
-          v-if="photos.length"
-          :photos="photos"
-          editable
-          class="photo-grid-block"
-          @cover="setCover"
-          @remove="removePhoto"
-        />
-        <a-empty v-else description="还没有照片，先记录一下今天吧" />
+        <section class="surface photo-card">
+          <div class="row-between">
+            <div>
+              <strong>照片与视频</strong>
+              <span class="muted photo-hint">共 {{ photos.length }} 个素材</span>
+            </div>
+            <div class="photo-actions">
+              <a-button :loading="uploading" @click="triggerUpload">上传</a-button>
+              <a-button @click="openImmich">从照片库导入</a-button>
+              <a-button @click="trashOpen = true">
+                回收站<span v-if="trashCount" class="trash-count">{{ trashCount }}</span>
+              </a-button>
+            </div>
+          </div>
+          <p class="muted paste-hint">支持 JPG/PNG/WebP/GIF/HEIC/AVIF 与常见视频；可直接 Ctrl/Cmd+V 粘贴截图</p>
+          <div v-if="uploading" class="upload-progress">
+            <a-progress :percent="uploadPercent" size="small" />
+          </div>
 
-        <input
-          ref="fileInput"
-          type="file"
-          accept="image/*,video/*,.heic,.heif,.avif,.mp4,.mov,.m4v,.webm,.mkv,.avi,.3gp"
-          multiple
-          hidden
-          @change="onFilesSelected"
-        />
-      </section>
+          <PhotoGrid
+            v-if="photos.length"
+            :photos="photos"
+            editable
+            class="photo-grid-block"
+            @cover="setCover"
+            @remove="removePhoto"
+          />
+          <a-empty v-else description="还没有照片，先记录一下今天吧" />
+
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/*,video/*,.heic,.heif,.avif,.mp4,.mov,.m4v,.webm,.mkv,.avi,.3gp"
+            multiple
+            hidden
+            @change="onFilesSelected"
+          />
+        </section>
+      </div>
     </a-spin>
 
     <a-modal
@@ -530,7 +532,7 @@ onBeforeUnmount(() => {
 .today-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-7);
 }
 
 .today-header {

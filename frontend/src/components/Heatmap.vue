@@ -83,25 +83,25 @@ const weeks = computed(() => {
 .heatmap-wrap {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   overflow-x: auto;
   padding-bottom: 6px;
 }
 
 .heatmap {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 
 .week {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .cell {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   border-radius: 3px;
   border: none;
   padding: 0;

@@ -146,3 +146,40 @@ def test_stats_excludes_trashed_photos(client, crypt):
         "/stats/overview", headers=auth_headers(token), json={"year": 2026}
     ).json()["data"]
     assert overview["totals"]["photos"] == 2
+
+
+class FakeImmichUserClient:
+    def __init__(self):
+        self.uploads = []
+
+    async def upload_asset(self, filename, content, mime_type, taken_at, album_id=""):
+        self.uploads.append({"filename": filename, "album": album_id, "size": len(content)})
+        return {"id": "asset-migrated-1"}
+
+
+def test_migrate_local_photos_to_immich(client, crypt, monkeypatch):
+    token = bearer(client, crypt)
+    photo = upload_photo(client, token)["data"]["photos"][0]
+    with SessionLocal() as db:
+        row = db.get(Photo, int(photo["id"]))
+        assert row.storage_kind == "local"
+        local_path = Path(row.local_path)
+        assert local_path.exists()
+
+        fake = FakeImmichUserClient()
+        monkeypatch.setattr(
+            photo_service.credential_service, "user_client", lambda db, user_id: fake
+        )
+        monkeypatch.setattr(
+            photo_service.credential_service, "album_of", lambda db, user_id: "album-1"
+        )
+        result = asyncio.run(photo_service.migrate_local_to_immich(db))
+        assert result == {"total": 1, "migrated": 1, "failed": []}
+        assert fake.uploads[0]["album"] == "album-1"
+
+        row = db.get(Photo, int(photo["id"]))
+        assert row.storage_kind == "immich"
+        assert row.immich_asset_id == "asset-migrated-1"
+        assert row.local_path is None
+        assert row.origin == "upload"
+        assert not local_path.exists()
