@@ -8,7 +8,7 @@ const PUBLIC_PATHS = ['/', '/Login', '/Register', '/404']
 
 export function setupGuard(router) {
   router.beforeEach(async (to) => {
-    document.title = to.meta?.title ? `${to.meta.title} · 每日照片记录` : '每日照片记录'
+    document.title = to.meta?.title ? `${to.meta.title} · 每日记录` : '每日记录'
     const token = localStorage.getItem('dr:token')
 
     if (PUBLIC_PATHS.includes(to.path)) {

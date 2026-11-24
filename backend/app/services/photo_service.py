@@ -1,6 +1,7 @@
 """照片回收站：软删除、恢复与到期清理。"""
 
 import logging
+import math
 from datetime import timedelta
 
 from sqlalchemy import select
@@ -46,7 +47,7 @@ def trash_item(photo: Photo, db: Session) -> dict:
     days_left = 0
     if photo.purge_after:
         seconds = (photo.purge_after - now_shanghai()).total_seconds()
-        days_left = max(0, int(seconds // 86400))
+        days_left = max(0, math.ceil(seconds / 86400))
     return {
         "id": str(photo.id),
         "mediaType": photo.media_type,

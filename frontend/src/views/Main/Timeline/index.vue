@@ -74,8 +74,16 @@
             <div class="entry-body">
               <p class="entry-note">{{ item.note || '这一天没有留下文字' }}</p>
               <div class="entry-meta">
-                <a-tag v-if="item.mood" color="blue">{{ item.mood }}</a-tag>
-                <a-tag v-for="tag in item.tags" :key="tag.id">{{ tag.name }}</a-tag>
+                <a-tag v-if="item.mood" color="blue">
+                  <span class="meta-icon"><AppIcon :name="resolveMoodIcon(item.mood)" :size="13" /></span>
+                  {{ item.mood }}
+                </a-tag>
+                <a-tag v-for="tag in item.tags" :key="tag.id">
+                  <span class="meta-icon">
+                    <AppIcon :name="resolveTagIcon(tag.name, tag.icon)" :size="13" />
+                  </span>
+                  {{ tag.name }}
+                </a-tag>
                 <span class="muted">{{ item.photos.length }} 个素材</span>
                 <a-button
                   size="small"
@@ -114,8 +122,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
 import { entryApi, photoApi } from '@/api/api'
+import AppIcon from '@/components/AppIcon.vue'
 import HistoryDrawer from '@/components/HistoryDrawer.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
+import { resolveMoodIcon, resolveTagIcon } from '@/store/icon'
 import { useAutoRefresh } from '@/utils'
 
 defineOptions({ name: 'Timeline' })
@@ -299,7 +309,7 @@ onActivated(() => {
 .timeline-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-5);
 }
 
 .filter-card {
@@ -433,6 +443,13 @@ onActivated(() => {
   margin-left: auto;
   padding: 0;
   font-size: 12px;
+}
+
+.meta-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+  vertical-align: -2px;
 }
 
 .pagination-row {
