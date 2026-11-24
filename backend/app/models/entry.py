@@ -36,5 +36,6 @@ class Tag(CommonFields, Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="tag")
+    icon: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     entries: Mapped[list[DailyEntry]] = relationship(secondary=entry_tag, back_populates="tags")
