@@ -1,7 +1,9 @@
 #!/usr/bin/env sh
 # 一键构建并启动：前端 9110，后端 9111
 # 用法：
-#   sh scripts/build.sh                 构建并启动
+#   sh scripts/build.sh                 构建并启动；版本号自动取下一个补丁版本 X.X.(X+1)
+#   sh scripts/build.sh 1.2.3           指定版本号构建
+#   sh scripts/build.sh --version 1.2.3 指定版本号构建
 #   sh scripts/build.sh --pull          先拉取最新基础镜像
 #   sh scripts/build.sh --no-cache      不使用构建缓存
 #   sh scripts/build.sh --git-pull      先拉取代码再构建
@@ -30,23 +32,70 @@ GIT_PULL=0
 PULL=0
 NO_CACHE=0
 CHECK=0
+VERSION_ARG=""
+EXPECT_VERSION=0
 
 for arg in "$@"; do
+    if [ "$EXPECT_VERSION" = "1" ]; then
+        VERSION_ARG=$arg
+        EXPECT_VERSION=0
+        continue
+    fi
     case "$arg" in
         --git-pull) GIT_PULL=1 ;;
         --pull) PULL=1 ;;
         --no-cache) NO_CACHE=1 ;;
         --check) CHECK=1 ;;
+        --version) EXPECT_VERSION=1 ;;
+        --version=*) VERSION_ARG=${arg#*=} ;;
         -h|--help)
-            sed -n '2,9p' "$0"
+            sed -n '2,12p' "$0"
             exit 0
             ;;
-        *)
+        -*)
             echo "未知参数：$arg" >&2
             exit 1
             ;;
+        *)
+            if [ -z "$VERSION_ARG" ]; then
+                VERSION_ARG=$arg
+            else
+                echo "未知参数：$arg" >&2
+                exit 1
+            fi
+            ;;
     esac
 done
+
+if [ "$EXPECT_VERSION" = "1" ]; then
+    echo "错误：--version 需要提供版本号，例如 --version 1.2.3" >&2
+    exit 1
+fi
+
+# shellcheck disable=SC1091
+. "$ROOT_DIR/scripts/version.sh"
+
+if [ -n "$VERSION_ARG" ]; then
+    if ! APP_VERSION=$(normalize_version "$VERSION_ARG"); then
+        echo "错误：版本号格式不正确：$VERSION_ARG（应为 X.Y.Z）" >&2
+        exit 1
+    fi
+else
+    APP_VERSION=$(next_version "$(current_version)")
+fi
+write_version "$APP_VERSION"
+export APP_VERSION
+
+# 同步写入 .env，保证直接执行 docker compose 时仍使用本次版本
+if grep -q '^APP_VERSION=' .env; then
+    TMP_ENV=$(mktemp 2>/dev/null || printf '.env.tmp.%s' "$$")
+    sed "s|^APP_VERSION=.*|APP_VERSION=${APP_VERSION}|" .env > "$TMP_ENV"
+    mv "$TMP_ENV" .env
+else
+    printf '\n# 构建版本（由 scripts/build.sh 自动写入）\nAPP_VERSION=%s\n' "$APP_VERSION" >> .env
+fi
+
+echo "==> 本次构建版本：$APP_VERSION"
 
 if [ "$GIT_PULL" = "1" ]; then
     if [ -d .git ]; then

@@ -18,6 +18,7 @@
         <a-descriptions-item label="显示名">{{ user.username }}</a-descriptions-item>
         <a-descriptions-item label="邮箱">{{ user.email }}</a-descriptions-item>
         <a-descriptions-item label="角色">{{ roleLabel }}</a-descriptions-item>
+        <a-descriptions-item label="版本">{{ appVersion }}</a-descriptions-item>
       </a-descriptions>
     </section>
 
@@ -123,6 +124,7 @@ import { TAG_ICON_OPTIONS, resolveTagIcon } from '@/store/icon'
 import { downloadText } from '@/utils'
 
 const store = useStore()
+const appVersion = __APP_VERSION__
 const pwdOpen = ref(false)
 const trashOpen = ref(false)
 const sessions = ref([])

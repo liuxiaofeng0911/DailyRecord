@@ -1,7 +1,9 @@
 #!/usr/bin/env sh
 # 换包更新：拉代码 -> 拉基础镜像 -> 重新构建 -> 滚动重启 -> 清理悬空镜像
 # 用法：
-#   sh scripts/update.sh
+#   sh scripts/update.sh                 自动使用下一个补丁版本 X.X.(X+1)
+#   sh scripts/update.sh 1.2.3           指定版本号更新
+#   sh scripts/update.sh --version 1.2.3 指定版本号更新
 #   sh scripts/update.sh --no-cache
 #   sh scripts/update.sh --check
 set -eu
