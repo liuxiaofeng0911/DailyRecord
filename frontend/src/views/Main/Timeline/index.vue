@@ -137,8 +137,14 @@ const filters = reactive({
   keyword: route.query.keyword || '',
   mood: route.query.mood || undefined,
   tag: route.query.tag || '',
-  range: null,
+  range: route.query.month ? monthRange(route.query.month) : null,
 })
+const monthFilter = ref(route.query.month || '')
+
+function monthRange(value) {
+  const start = dayjs(`${value}-01`)
+  return [start.startOf('month'), start.endOf('month')]
+}
 
 const presets = [
   { label: '本月', start: dayjs().startOf('month'), end: dayjs().endOf('month') },
@@ -218,12 +224,14 @@ function syncQuery() {
       keyword: filters.keyword || undefined,
       mood: filters.mood || undefined,
       tag: filters.tag || undefined,
+      month: monthFilter.value || undefined,
       page: pageNumber.value > 1 ? pageNumber.value : undefined,
     },
   })
 }
 
 function applyFilters() {
+  monthFilter.value = ''
   pageNumber.value = 1
   syncQuery()
   run(false)
@@ -234,10 +242,12 @@ function resetFilters() {
   filters.mood = undefined
   filters.tag = ''
   filters.range = null
+  monthFilter.value = ''
   applyFilters()
 }
 
 function applyPreset(preset) {
+  monthFilter.value = ''
   filters.range = [preset.start, preset.end]
   applyFilters()
 }
@@ -260,6 +270,14 @@ function openHistory(date) {
 watch(
   () => route.query,
   (query) => {
+    const nextMonth = query.month || ''
+    if (nextMonth !== monthFilter.value) {
+      monthFilter.value = nextMonth
+      filters.range = nextMonth ? monthRange(nextMonth) : null
+      pageNumber.value = 1
+      run(false)
+      return
+    }
     if ((query.keyword || '') !== filters.keyword || (query.mood || '') !== (filters.mood || '')) {
       filters.keyword = query.keyword || ''
       filters.mood = query.mood || undefined
