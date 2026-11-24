@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, BigInteger, Date, DateTime, String, Text
+from sqlalchemy import JSON, BigInteger, Date, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..common.snowflake import next_id
@@ -69,3 +69,19 @@ class ChangeLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=now_shanghai, nullable=False, index=True
     )
+
+
+class JobRun(Base):
+    """定时任务执行记录，同一 job_name + run_key 只跑一次。"""
+
+    __tablename__ = "dr_job_run"
+    __table_args__ = (UniqueConstraint("job_name", "run_key", name="uq_dr_job_run"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    job_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    run_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="RUNNING")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=now_shanghai)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     max_upload_mb: int = 200
     cors_origins: str = "http://localhost:5173,http://localhost:9110"
 
+    photo_purge_enabled: bool = True
+    photo_purge_hour: int = 3
+    photo_purge_minute: int = 30
+
     @property
     def immich_enabled(self) -> bool:
         return bool(self.immich_url and self.immich_api_key)

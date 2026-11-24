@@ -111,6 +111,21 @@ def test_purge_expired_only_removes_due_rows(client, crypt):
         assert db.get(Photo, int(later["id"])) is not None
 
 
+def test_purge_job_is_idempotent_per_day(client, crypt):
+    token = bearer(client, crypt)
+    photo = upload_photo(client, token)["data"]["photos"][0]
+    client.post("/photo/delete", headers=auth_headers(token), json={"id": photo["id"]})
+    with SessionLocal() as db:
+        db.get(Photo, int(photo["id"])).purge_after = now_shanghai() - timedelta(minutes=1)
+        db.commit()
+        first = asyncio.run(photo_service.run_purge_job(db, "2026-11-24"))
+        assert first["skipped"] is False
+        assert first["purged"] == 1
+        second = asyncio.run(photo_service.run_purge_job(db, "2026-11-24"))
+        assert second["skipped"] is True
+        assert second["status"] == "SUCCESS"
+
+
 def test_stats_excludes_trashed_photos(client, crypt):
     token = bearer(client, crypt)
     save_entry(client, token)
