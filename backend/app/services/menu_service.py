@@ -61,7 +61,9 @@ def build_tree(resources: list[Resource]) -> list[dict]:
             "name": row.name,
             "path": row.web_url or "",
             "icon": row.icon_name or "",
+            "pid": str(row.pid or 0),
             "sort": row.sort,
+            "enable": row.enable,
             "children": [node(item) for item in children.get(row.id, [])],
         }
 

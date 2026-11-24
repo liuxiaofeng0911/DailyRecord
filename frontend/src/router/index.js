@@ -77,6 +77,12 @@ const routes = [
         meta: { title: '组织管理', owner: true },
       },
       {
+        path: 'Menu',
+        name: 'SystemMenu',
+        component: () => import('@/views/System/Menu/index.vue'),
+        meta: { title: '菜单管理', owner: true },
+      },
+      {
         path: 'BaseCode',
         name: 'SystemBaseCode',
         component: () => import('@/views/System/BaseCode/index.vue'),

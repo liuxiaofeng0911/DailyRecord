@@ -17,6 +17,8 @@ export default {
   state: () => ({
     token: localStorage.getItem(TOKEN_KEY) || '',
     userInfo: readUser(),
+    menus: [],
+    menusLoaded: false,
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
@@ -33,6 +35,10 @@ export default {
       state.userInfo = info || null
       if (info) localStorage.setItem(USER_KEY, JSON.stringify(info))
       else localStorage.removeItem(USER_KEY)
+    },
+    setMenus(state, menus) {
+      state.menus = menus || []
+      state.menusLoaded = true
     },
   },
   actions: {
@@ -60,7 +66,17 @@ export default {
     async fetchMe({ commit }) {
       const data = await authApi.me()
       commit('setUserInfo', data.userInfo)
+      commit('setMenus', data.menus)
       return data
+    },
+    async loadMenus({ commit }) {
+      try {
+        const data = await authApi.me()
+        commit('setUserInfo', data.userInfo)
+        commit('setMenus', data.menus)
+      } catch {
+        commit('setMenus', [])
+      }
     },
     async logout({ commit }) {
       try {
@@ -70,10 +86,12 @@ export default {
       }
       commit('setToken', '')
       commit('setUserInfo', null)
+      commit('setMenus', [])
     },
     clear({ commit }) {
       commit('setToken', '')
       commit('setUserInfo', null)
+      commit('setMenus', [])
     },
   },
 }

@@ -12,6 +12,7 @@ export const NAV_ICONS = {
   '/System/User': 'lucide:users',
   '/System/Role': 'lucide:shield-check',
   '/System/Organization': 'lucide:building-2',
+  '/System/Menu': 'lucide:list-tree',
   '/System/BaseCode': 'lucide:book-open',
 }
 
