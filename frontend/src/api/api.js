@@ -18,6 +18,7 @@ export const entryApi = {
   save: (payload) => Post('/entry/save', payload),
   remove: (entryDate) => Post('/entry/delete', { entryDate }),
   calendar: (payload) => Post('/entry/calendar', payload),
+  history: (payload) => Post('/entry/history', payload),
 }
 
 export const photoApi = {
@@ -26,6 +27,9 @@ export const photoApi = {
   update: (payload) => Post('/photo/update', payload),
   remove: (id) => Post('/photo/delete', { id }),
   describe: (id) => Post('/photo/describe', { id }),
+  trashList: (payload = {}) => Post('/photo/trash/list', payload),
+  trashRestore: (ids) => Post('/photo/trash/restore', { ids }),
+  trashPurge: (ids) => Post('/photo/trash/purge', { ids }),
   thumbnail: (id) => `/api/photo/thumbnail/${id}`,
   original: (id) => `/api/photo/original/${id}`,
 }

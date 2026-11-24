@@ -5,7 +5,10 @@
         <h2 class="page-title">统计</h2>
         <p class="page-subtitle">记录密度、连续天数与常用标签。</p>
       </div>
-      <a-select v-model:value="year" :options="yearOptions" style="width: 120px" @change="load" />
+      <div class="head-actions">
+        <RefreshButton :last-updated="lastUpdated" :loading="refreshing" @refresh="run(false)" />
+        <a-select v-model:value="year" :options="yearOptions" style="width: 120px" @change="run(false)" />
+      </div>
     </div>
 
     <a-spin :spinning="loading">
@@ -75,21 +78,30 @@
 
 <script setup>
 import dayjs from 'dayjs'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, onMounted, ref } from 'vue'
+import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 
 import { statsApi } from '@/api/api'
 import Heatmap from '@/components/Heatmap.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
+import { useAutoRefresh } from '@/utils'
+
+defineOptions({ name: 'Stats' })
 
 const router = useRouter()
+const store = useStore()
 const nowYear = dayjs().year()
 const year = ref(nowYear)
 const loading = ref(false)
+const renderedVersion = ref(-1)
 const overview = ref({
   totals: { days: 0, photos: 0, currentStreak: 0, longestStreak: 0 },
   months: [],
   days: [],
   topTags: [],
+  moods: [],
+  recentDays: [],
 })
 
 const yearOptions = Array.from({ length: 8 }, (_, index) => {
@@ -110,20 +122,27 @@ function tagWidth(count) {
   return `${Math.max(6, (count / maxTag.value) * 100)}%`
 }
 
-async function load() {
-  loading.value = true
+async function load({ silent = false } = {}) {
+  if (!silent) loading.value = true
   try {
     overview.value = await statsApi.overview(year.value)
+    renderedVersion.value = store.state.app.dataVersion.stats
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
+
+const { lastUpdated, refreshing, run } = useAutoRefresh(load)
 
 function openDay(date) {
   router.push({ path: '/Main/Today', query: { date } })
 }
 
-onMounted(load)
+onMounted(() => run(false))
+
+onActivated(() => {
+  if (renderedVersion.value !== store.state.app.dataVersion.stats) run(true)
+})
 </script>
 
 <style scoped lang="less">
@@ -131,6 +150,12 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .metric-grid {

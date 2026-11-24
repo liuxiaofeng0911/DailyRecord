@@ -9,6 +9,7 @@ export default {
     dark: resolveTheme(initialMode) === 'dark',
     collapsed: false,
     mobile: window.innerWidth < 768,
+    dataVersion: { entries: 0, stats: 0 },
   }),
   mutations: {
     setTheme(state, mode) {
@@ -20,6 +21,11 @@ export default {
     },
     setMobile(state, value) {
       state.mobile = value
+    },
+    bumpDataVersion(state, keys = ['entries', 'stats']) {
+      keys.forEach((key) => {
+        if (key in state.dataVersion) state.dataVersion[key] += 1
+      })
     },
   },
 }
