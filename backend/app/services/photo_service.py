@@ -7,10 +7,10 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import ChangeLog, DailyEntry, Photo
+from ..models import ChangeLog, DailyEntry, JobRun, Photo
 from . import storage
 from .immich import ImmichClient, ImmichError
-from .timeutil import now_shanghai
+from .timeutil import now_shanghai, today_shanghai
 
 logger = logging.getLogger(__name__)
 
@@ -121,3 +121,43 @@ async def purge_expired(db: Session, limit: int = PURGE_LIMIT) -> dict:
             failed.append(str(photo.id))
     db.commit()
     return {"purged": len(rows) - len(failed), "failed": failed}
+
+
+async def run_purge_job(db: Session, run_key: str | None = None) -> dict:
+    """每日清理任务入口：按天幂等，结果写入 dr_job_run。"""
+    key = run_key or today_shanghai().isoformat()
+    job = db.scalars(
+        select(JobRun).where(JobRun.job_name == "photo_purge", JobRun.run_key == key)
+    ).first()
+    if job is not None and job.status in ("RUNNING", "SUCCESS"):
+        return {"skipped": True, "status": job.status, "purged": 0, "failed": []}
+    if job is None:
+        job = JobRun(job_name="photo_purge", run_key=key, status="RUNNING")
+        db.add(job)
+    else:
+        job.status = "RUNNING"
+        job.error = None
+    job.started_at = now_shanghai()
+    job.finished_at = None
+    db.commit()
+
+    try:
+        result = await purge_expired(db)
+    except Exception as exc:  # pragma: no cover - 防御性
+        logger.exception("回收站清理任务失败")
+        db.rollback()
+        job = db.get(JobRun, job.id)
+        if job is not None:
+            job.status = "FAILED"
+            job.error = str(exc)[:2000]
+            job.finished_at = now_shanghai()
+            db.commit()
+        return {"skipped": False, "status": "FAILED", "purged": 0, "failed": []}
+
+    job = db.get(JobRun, job.id)
+    if job is not None:
+        job.status = "SUCCESS"
+        job.finished_at = now_shanghai()
+        job.error = None
+        db.commit()
+    return {"skipped": False, "status": "SUCCESS", **result}

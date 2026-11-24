@@ -1,5 +1,7 @@
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from datetime import timedelta
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -14,9 +16,33 @@ from .common.result import fail, ok
 from .config import settings
 from .db import SessionLocal, create_all, get_db
 from .services.bootstrap import ensure_seed_data
+from .services.photo_service import run_purge_job
+from .services.timeutil import now_shanghai
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger("dailyrecord")
+
+
+def _seconds_until_purge() -> float:
+    now = now_shanghai()
+    target = now.replace(
+        hour=settings.photo_purge_hour, minute=settings.photo_purge_minute, second=0, microsecond=0
+    )
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
+
+
+async def _purge_loop() -> None:
+    """每天 03:30（东八区）清理到期回收站照片。"""
+    while True:
+        await asyncio.sleep(max(60.0, _seconds_until_purge()))
+        try:
+            with SessionLocal() as db:
+                result = await run_purge_job(db)
+                logger.info("回收站清理完成: %s", result)
+        except Exception:  # pragma: no cover - 后台任务防御
+            logger.exception("回收站清理任务失败")
 
 
 @asynccontextmanager
@@ -25,10 +51,17 @@ async def lifespan(_app: FastAPI):
         create_all()
         with SessionLocal() as db:
             ensure_seed_data(db)
+    purge_task = None
+    if settings.photo_purge_enabled and settings.env != "test":
+        purge_task = asyncio.create_task(_purge_loop())
     yield
+    if purge_task is not None:
+        purge_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await purge_task
 
 
-app = FastAPI(title="每日照片记录 API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="每日记录 API", version="1.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
