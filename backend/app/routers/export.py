@@ -13,6 +13,7 @@ from ..db import get_db
 from ..deps import UserContext, get_current_user
 from ..models import DailyEntry
 from ..schemas.stats import ExportRequest
+from ..services.entry_service import active_photos
 from ..services.timeutil import now_shanghai, today_shanghai
 
 router = APIRouter(
@@ -71,7 +72,7 @@ def export_entries(
                             "caption": photo.caption,
                             "immichAssetId": photo.immich_asset_id,
                         }
-                        for photo in entry.photos
+                        for photo in active_photos(list(entry.photos))
                     ],
                 }
                 for entry in entries
@@ -79,9 +80,9 @@ def export_entries(
         }
         content = json.dumps(data, ensure_ascii=False, indent=2)
         mime = "application/json"
-        filename = f"dailyrecord-{start.isoformat()}-{end.isoformat()}.json"
+        filename = f"每日记录-{start.isoformat()}-{end.isoformat()}.json"
     elif fmt in ("markdown", "md"):
-        lines = ["# 每日照片记录", ""]
+        lines = ["# 每日记录", ""]
         for entry in entries:
             lines.append(f"## {entry.entry_date.isoformat()}")
             lines.append("")
@@ -94,13 +95,13 @@ def export_entries(
             if entry.note:
                 lines.append(entry.note)
                 lines.append("")
-            for photo in entry.photos:
+            for photo in active_photos(list(entry.photos)):
                 caption = photo.caption or photo.media_type
                 lines.append(f"- {caption}（{photo.media_type}）")
             lines.append("")
         content = "\n".join(lines)
         mime = "text/markdown"
-        filename = f"dailyrecord-{start.isoformat()}-{end.isoformat()}.md"
+        filename = f"每日记录-{start.isoformat()}-{end.isoformat()}.md"
     else:
         raise ApiError(codes.BAD_REQUEST, "仅支持 json 或 markdown 格式")
 

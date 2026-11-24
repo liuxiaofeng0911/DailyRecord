@@ -19,6 +19,7 @@ class Photo(CommonFields, Base):
     local_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     mime_type: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     media_type: Mapped[str] = mapped_column(String(8), nullable=False, default="IMAGE")
+    origin: Mapped[str] = mapped_column(String(8), nullable=False, default="upload")
     taken_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     caption: Mapped[str] = mapped_column(Text, nullable=False, default="")
     caption_source: Mapped[str] = mapped_column(String(8), nullable=False, default="none")
@@ -28,5 +29,8 @@ class Photo(CommonFields, Base):
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    deleted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    purge_after: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     entry: Mapped["DailyEntry | None"] = relationship(back_populates="photos")  # noqa: F821

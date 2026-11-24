@@ -18,6 +18,7 @@ class PhotoOut(CamelModel):
     storage_kind: str = "immich"
     media_type: str
     mime_type: str
+    origin: str = "upload"
     taken_at: OptDateTimeStr = None
     caption: str = ""
     caption_source: str = "none"

@@ -29,6 +29,7 @@ def search(
         photo_ids = select(Photo.entry_id).where(
             Photo.user_id == user.id,
             Photo.entry_id.is_not(None),
+            Photo.deleted_at.is_(None),
             Photo.caption.ilike(f"%{keyword}%"),
         )
         stmt = stmt.where(

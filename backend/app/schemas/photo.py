@@ -25,6 +25,16 @@ class PhotoListRequest(CamelModel):
     page_size: int = 100
 
 
+class TrashListRequest(CamelModel):
+    page: dict | None = None
+    page_number: int | None = None
+    page_size: int | None = None
+
+
+class PhotoIdsRequest(CamelModel):
+    ids: list[StrId] = Field(default_factory=list)
+
+
 class UploadError(CamelModel):
     filename: str
     reason: str

@@ -1,11 +1,13 @@
-"""运维命令行：重置密码、创建邀请码。
+"""运维命令行：重置密码、创建邀请码、清理回收站。
 
 用法：
   python -m app.cli reset-password --userid me --password 'NewStrongPass123'
   python -m app.cli create-invite --days 7
+  python -m app.cli purge-photos
 """
 
 import argparse
+import asyncio
 import hashlib
 import secrets
 from datetime import timedelta
@@ -15,6 +17,7 @@ from sqlalchemy import func, select
 from .db import SessionLocal
 from .models import ComUser, InviteCode
 from .security.password import hash_password, validate_password_strength
+from .services import photo_service
 from .services.auth_service import revoke_all_sessions
 from .services.timeutil import now_shanghai
 
@@ -50,6 +53,12 @@ def create_invite(created_by: int, days: int) -> str:
     return code
 
 
+def purge_photos() -> None:
+    with SessionLocal() as db:
+        result = asyncio.run(photo_service.purge_expired(db))
+        print(f"已清理 {result['purged']} 张过期照片，失败 {len(result['failed'])} 张")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="DailyRecord 运维工具")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -62,11 +71,15 @@ def main() -> None:
     invite.add_argument("--created-by", type=int, default=1)
     invite.add_argument("--days", type=int, default=7)
 
+    sub.add_parser("purge-photos", help="清理回收站中到期照片")
+
     args = parser.parse_args()
     if args.command == "reset-password":
         reset_password(args.userid, args.password)
     elif args.command == "create-invite":
         print(create_invite(args.created_by, args.days))
+    elif args.command == "purge-photos":
+        purge_photos()
 
 
 if __name__ == "__main__":
