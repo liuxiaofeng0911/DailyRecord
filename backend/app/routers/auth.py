@@ -32,7 +32,7 @@ from ..security.password import (
     validate_password_strength,
     verify_password,
 )
-from ..services import menu_service, ratelimit
+from ..services import credential_service, menu_service, ratelimit
 from ..services.auth_service import (
     client_ip,
     create_session_token,
@@ -119,7 +119,7 @@ def public_key(db: Session = Depends(get_db)):
 
 
 @router.post("/register")
-def register(
+async def register(
     payload: RegisterRequest,
     request: Request,
     response: Response,
@@ -193,6 +193,11 @@ def register(
     touch_login(db, user)
     write_login_log(db, request, userid=user.userid, result="SUCCESS", user_id=user.id, reason="register")
     db.commit()
+
+    try:
+        await credential_service.provision_user(db, user)
+    except Exception:  # noqa: BLE001 - 开通失败不影响账号与登录
+        db.rollback()
 
     _set_cookie(response, token)
     return ok(LoginData(token=token, user_info=_user_info(db, user, role_code)))

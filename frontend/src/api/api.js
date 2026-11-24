@@ -36,6 +36,8 @@ export const photoApi = {
 
 export const immichApi = {
   status: () => Post('/immich/status'),
+  credentialGet: () => Post('/immich/credential/get'),
+  credentialRetry: () => Post('/immich/credential/retry'),
   assets: (date) => Post('/immich/assets', { date }),
   import: (payload) => Post('/immich/import', payload),
 }

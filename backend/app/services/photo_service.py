@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import ChangeLog, DailyEntry, JobRun, Photo
-from . import storage
-from .immich import ImmichClient, ImmichError
+from . import credential_service, storage
+from .immich import ImmichError
 from .timeutil import now_shanghai, today_shanghai
 
 logger = logging.getLogger(__name__)
@@ -68,11 +68,15 @@ async def purge_photo(db: Session, photo: Photo) -> None:
     if photo.storage_kind == "local":
         storage.delete_local(photo)
     elif photo.origin == "upload" and photo.immich_asset_id:
-        try:
-            await ImmichClient().delete_asset(photo.immich_asset_id)
-        except ImmichError as exc:
-            # 原图删除失败时不阻塞引用清理，避免回收站无限增长
-            logger.warning("删除 Immich 资产失败: %s", exc)
+        client = credential_service.user_client(db, photo.user_id)
+        if client is None:
+            logger.warning("照片库凭据不可用，跳过删除 Immich 资产: %s", photo.id)
+        else:
+            try:
+                await client.delete_asset(photo.immich_asset_id)
+            except ImmichError as exc:
+                # 原图删除失败时不阻塞引用清理，避免回收站无限增长
+                logger.warning("删除 Immich 资产失败: %s", exc)
     db.delete(photo)
 
 

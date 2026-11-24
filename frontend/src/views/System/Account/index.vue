@@ -25,7 +25,17 @@
     <section class="surface">
       <div class="row-between section-head">
         <strong>照片库</strong>
-        <a-tag :color="photoTagColor">{{ photoTagText }}</a-tag>
+        <div class="photo-head">
+          <a-tag :color="photoTagColor">{{ photoTagText }}</a-tag>
+          <a-button
+            v-if="photoCanRetry"
+            size="small"
+            :loading="photoRetrying"
+            @click="retryPhoto"
+          >
+            重试开通
+          </a-button>
+        </div>
       </div>
       <p class="muted info-text">{{ photoDetail }}</p>
       <p class="muted info-text">
@@ -143,26 +153,40 @@ const sessionLoading = ref(false)
 const exporting = ref('')
 const tags = ref([])
 const tagLoading = ref(false)
-const photoStatus = ref({ enabled: false, available: false, message: '' })
+const photoStatus = ref({ enabled: false, available: false, message: '', provisionStatus: 'none' })
+const photoRetrying = ref(false)
 
 const photoTagText = computed(() => {
-  if (!photoStatus.value.enabled) return '本机存储'
-  return photoStatus.value.available ? '已接入' : '暂时不可用'
+  if (photoStatus.value.available) return '已接入'
+  if (photoStatus.value.provisionStatus === 'failed') return '开通失败'
+  if (photoStatus.value.provisionStatus === 'pending') return '开通中'
+  return '未接入'
 })
 
 const photoTagColor = computed(() => {
-  if (!photoStatus.value.enabled) return 'default'
-  return photoStatus.value.available ? 'green' : 'orange'
+  if (photoStatus.value.available) return 'green'
+  if (photoStatus.value.provisionStatus === 'failed') return 'red'
+  if (photoStatus.value.provisionStatus === 'pending') return 'orange'
+  return 'default'
 })
 
+const photoCanRetry = computed(
+  () =>
+    photoStatus.value.provisionStatus === 'failed' ||
+    (photoStatus.value.enabled && !photoStatus.value.bound),
+)
+
 const photoDetail = computed(() => {
-  if (!photoStatus.value.enabled) {
-    return '照片库尚未接入，照片会保存在服务器本机；记录、上传、回收站均可正常使用。'
+  if (photoStatus.value.available) {
+    return '照片会保存到照片库，也可以从照片库导入已有照片。'
   }
-  if (!photoStatus.value.available) {
-    return photoStatus.value.message || '照片库暂时无法连接，照片会保存在服务器本机。'
+  if (photoStatus.value.provisionStatus === 'failed') {
+    return '照片库开通失败，照片仍会保存在服务器本机；可以点击“重试开通”。'
   }
-  return '照片会保存到照片库，也可以从照片库导入已有照片。'
+  if (photoStatus.value.provisionStatus === 'pending') {
+    return '正在为当前账号开通照片库，稍后刷新本页即可。'
+  }
+  return '照片库尚未接入，照片会保存在服务器本机；记录、上传、回收站均可正常使用。'
 })
 
 const user = computed(() => store.state.auth.userInfo || {})
@@ -240,7 +264,23 @@ async function loadPhotoStatus() {
   try {
     photoStatus.value = await immichApi.status()
   } catch {
-    photoStatus.value = { enabled: false, available: false, message: '' }
+    photoStatus.value = {
+      enabled: false,
+      available: false,
+      message: '',
+      provisionStatus: 'none',
+    }
+  }
+}
+
+async function retryPhoto() {
+  photoRetrying.value = true
+  try {
+    await immichApi.credentialRetry()
+    message.success('照片库已开通')
+    await loadPhotoStatus()
+  } finally {
+    photoRetrying.value = false
   }
 }
 
@@ -351,5 +391,11 @@ onMounted(() => {
   margin: 0 0 var(--space-2);
   line-height: 1.8;
   font-size: 13px;
+}
+
+.photo-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 </style>

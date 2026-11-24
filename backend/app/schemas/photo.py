@@ -67,3 +67,5 @@ class ImmichStatusOut(CamelModel):
     enabled: bool
     available: bool
     message: str = ""
+    bound: bool = False
+    provision_status: str = "none"

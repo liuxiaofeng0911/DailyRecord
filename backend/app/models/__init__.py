@@ -1,4 +1,5 @@
 from .entry import DailyEntry, Tag, entry_tag
+from .immich import ImmichCredential
 from .ops import ChangeLog, InviteCode, JobRun, LoginLog, UserSession
 from .photo import Photo
 from .summary import DailySummary
@@ -20,6 +21,7 @@ __all__ = [
     "DailyEntry",
     "DailySummary",
     "GeneralCode",
+    "ImmichCredential",
     "InviteCode",
     "JobRun",
     "LoginLog",

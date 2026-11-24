@@ -128,12 +128,12 @@ def test_immich_status_and_unavailable(client, crypt):
     assets = client.post(
         "/immich/assets", headers=auth_headers(token), json={"date": "2026-11-20"}
     ).json()
-    assert assets["code"] == 1010
+    assert assets["code"] == 1013
 
     imported = client.post(
         "/immich/import", headers=auth_headers(token), json={"date": "2026-11-20"}
     ).json()
-    assert imported["code"] == 1010
+    assert imported["code"] == 1013
 
 
 def test_export_json_and_markdown(client, crypt):
