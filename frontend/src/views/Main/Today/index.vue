@@ -12,6 +12,7 @@
         <span v-if="streak > 0" class="chip">连续记录 {{ streak }} 天</span>
       </div>
       <div class="header-actions">
+        <a-button @click="historyOpen = true">修改记录</a-button>
         <RefreshButton :last-updated="lastUpdated" :loading="loading" @refresh="manualRefresh" />
         <a-button :disabled="!entry" @click="removeEntry">删除当天</a-button>
         <a-button type="primary" :loading="saving" @click="save">保存</a-button>
@@ -63,6 +64,9 @@
           <div class="photo-actions">
             <a-button :loading="uploading" @click="triggerUpload">上传</a-button>
             <a-button @click="openImmich">从 Immich 导入</a-button>
+            <a-button @click="trashOpen = true">
+              回收站<span v-if="trashCount" class="trash-count">{{ trashCount }}</span>
+            </a-button>
           </div>
         </div>
         <p class="muted paste-hint">支持 JPG/PNG/WebP/GIF/HEIC/AVIF 与常见视频；可直接 Ctrl/Cmd+V 粘贴截图</p>
@@ -139,6 +143,9 @@
         </div>
       </a-spin>
     </a-modal>
+
+    <HistoryDrawer v-model:open="historyOpen" :date="date" />
+    <TrashDrawer v-model:open="trashOpen" @changed="onTrashChanged" />
   </div>
 </template>
 
@@ -151,7 +158,9 @@ import { useStore } from 'vuex'
 
 import { entryApi, immichApi, photoApi } from '@/api/api'
 import PhotoGrid from '@/components/PhotoGrid.vue'
+import HistoryDrawer from '@/components/HistoryDrawer.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
+import TrashDrawer from '@/components/TrashDrawer.vue'
 import { draftKey, relativeDay, today } from '@/utils'
 
 defineOptions({ name: 'Today' })
@@ -174,6 +183,9 @@ const uploadPercent = ref(0)
 const fileInput = ref(null)
 const dirty = ref(false)
 const lastUpdated = ref(null)
+const historyOpen = ref(false)
+const trashOpen = ref(false)
+const trashCount = ref(0)
 
 const immichOpen = ref(false)
 const immichLoading = ref(false)
@@ -230,10 +242,12 @@ async function load() {
   loading.value = true
   dirty.value = false
   try {
-    const [entryData, unattached] = await Promise.all([
+    const [entryData, unattached, trash] = await Promise.all([
       entryApi.get(date.value),
       photoApi.list({ start: date.value, end: date.value, unattached: true }),
+      photoApi.trashList({ page: { pageNumber: 1, pageSize: 1 } }),
     ])
+    trashCount.value = trash?.totalRow || 0
     entry.value = entryData || null
     note.value = entryData?.note || ''
     mood.value = entryData?.mood || null
@@ -268,6 +282,11 @@ async function load() {
 
 function bumpVersions() {
   store.commit('app/bumpDataVersion', ['entries', 'stats'])
+}
+
+function onTrashChanged() {
+  bumpVersions()
+  load()
 }
 
 function manualRefresh() {
@@ -580,6 +599,20 @@ onBeforeUnmount(() => {
 
 .photo-grid-block {
   margin-top: 16px;
+}
+
+.trash-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--app-primary-weak);
+  color: var(--app-primary);
+  font-size: 10px;
 }
 
 .immich-grid {

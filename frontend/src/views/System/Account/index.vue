@@ -56,6 +56,14 @@
     </section>
 
     <section class="surface">
+      <div class="row-between section-head">
+        <strong>照片回收站</strong>
+        <a-button size="small" @click="trashOpen = true">打开回收站</a-button>
+      </div>
+      <p class="muted trash-hint">删除的照片保留 30 天，期间可恢复；到期自动清理。</p>
+    </section>
+
+    <section class="surface">
       <div class="section-head">
         <strong>导出数据</strong>
         <p class="muted export-hint">导出全部记录为 JSON 或 Markdown，便于备份与迁移。</p>
@@ -67,6 +75,7 @@
     </section>
 
     <EditPwdModal v-model:open="pwdOpen" />
+    <TrashDrawer v-model:open="trashOpen" @changed="onTrashChanged" />
   </div>
 </template>
 
@@ -77,10 +86,12 @@ import { useStore } from 'vuex'
 
 import { authApi, exportApi } from '@/api/api'
 import EditPwdModal from '@/components/EditPwdModal.vue'
+import TrashDrawer from '@/components/TrashDrawer.vue'
 import { downloadText } from '@/utils'
 
 const store = useStore()
 const pwdOpen = ref(false)
+const trashOpen = ref(false)
 const sessions = ref([])
 const sessionLoading = ref(false)
 const exporting = ref('')
@@ -136,6 +147,10 @@ async function doExport(format) {
   }
 }
 
+function onTrashChanged() {
+  store.commit('app/bumpDataVersion', ['entries', 'stats'])
+}
+
 onMounted(loadSessions)
 </script>
 
@@ -152,6 +167,11 @@ onMounted(loadSessions)
 
 .export-hint {
   margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.trash-hint {
+  margin: 0;
   font-size: 12px;
 }
 </style>
