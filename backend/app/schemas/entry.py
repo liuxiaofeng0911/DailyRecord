@@ -9,6 +9,7 @@ class TagOut(CamelModel):
     id: StrId
     name: str
     kind: str
+    icon: str | None = None
 
 
 class PhotoOut(CamelModel):
@@ -65,6 +66,12 @@ class EntryHistoryRequest(CamelModel):
     page: dict | None = None
     page_number: int | None = None
     page_size: int | None = None
+
+
+class TagSaveRequest(CamelModel):
+    id: StrId
+    name: str | None = None
+    icon: str | None = None
 
 
 class EntryListRequest(CamelModel):

@@ -65,7 +65,7 @@ def _serialize(entry: DailyEntry, changed_fields: list[str] | None = None) -> En
         entry_date=entry.entry_date,
         note=entry.note or "",
         mood=entry.mood,
-        tags=[TagOut(id=tag.id, name=tag.name, kind=tag.kind) for tag in entry.tags],
+        tags=[TagOut(id=tag.id, name=tag.name, kind=tag.kind, icon=tag.icon) for tag in entry.tags],
         photos=[
             PhotoOut.model_validate(photo)
             for photo in sorted(
