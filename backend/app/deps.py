@@ -83,6 +83,17 @@ def get_current_user(
         db.commit()
 
     role = role_code_of(db, user.id)
+    # 兼容旧会话：把 /api/photo 作用域的 Cookie 迁移到 /api，覆盖照片库缩略图
+    if request.cookies.get(COOKIE_NAME):
+        response.set_cookie(
+            COOKIE_NAME,
+            token,
+            max_age=settings.jwt_expire_minutes * 60,
+            httponly=True,
+            secure=settings.env == "prod",
+            samesite="lax",
+            path=COOKIE_PATH,
+        )
     if seconds_remaining(payload) <= settings.jwt_refresh_threshold_minutes * 60:
         new_token, _, expires = create_token(
             user_id=user.id,
