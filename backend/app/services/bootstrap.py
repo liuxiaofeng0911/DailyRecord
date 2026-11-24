@@ -36,11 +36,173 @@ SWITCH_SEEDS: dict[str, tuple[str, str]] = {
 }
 
 MENU_SEEDS = [
-    ("今天", "Today", "/Main/Today", 1),
-    ("时间线", "Timeline", "/Main/Timeline", 2),
-    ("统计", "Stats", "/Main/Stats", 3),
-    ("系统管理", "System", "/System/User", 4),
+    {
+        "key": "today",
+        "name": "今天",
+        "icon": "lucide:calendar-heart",
+        "path": "/Main/Today",
+        "sort": 1,
+        "parent": None,
+        "member": True,
+    },
+    {
+        "key": "timeline",
+        "name": "时间线",
+        "icon": "lucide:history",
+        "path": "/Main/Timeline",
+        "sort": 2,
+        "parent": None,
+        "member": True,
+    },
+    {
+        "key": "stats",
+        "name": "统计",
+        "icon": "lucide:chart-column",
+        "path": "/Main/Stats",
+        "sort": 3,
+        "parent": None,
+        "member": True,
+    },
+    {
+        "key": "system",
+        "name": "系统管理",
+        "icon": "lucide:settings",
+        "path": "",
+        "sort": 4,
+        "parent": None,
+        "member": True,
+    },
+    {
+        "key": "account",
+        "name": "账户设置",
+        "icon": "lucide:user-round",
+        "path": "/System/Account",
+        "sort": 1,
+        "parent": "system",
+        "member": True,
+    },
+    {
+        "key": "settings",
+        "name": "系统设置",
+        "icon": "lucide:settings-2",
+        "path": "/System/Settings",
+        "sort": 2,
+        "parent": "system",
+        "member": False,
+    },
+    {
+        "key": "user",
+        "name": "用户管理",
+        "icon": "lucide:users",
+        "path": "/System/User",
+        "sort": 3,
+        "parent": "system",
+        "member": False,
+    },
+    {
+        "key": "role",
+        "name": "角色管理",
+        "icon": "lucide:shield-check",
+        "path": "/System/Role",
+        "sort": 4,
+        "parent": "system",
+        "member": False,
+    },
+    {
+        "key": "org",
+        "name": "组织管理",
+        "icon": "lucide:building-2",
+        "path": "/System/Organization",
+        "sort": 5,
+        "parent": "system",
+        "member": False,
+    },
+    {
+        "key": "menu",
+        "name": "菜单管理",
+        "icon": "lucide:list-tree",
+        "path": "/System/Menu",
+        "sort": 6,
+        "parent": "system",
+        "member": False,
+    },
+    {
+        "key": "dict",
+        "name": "字典管理",
+        "icon": "lucide:book-open",
+        "path": "/System/BaseCode",
+        "sort": 7,
+        "parent": "system",
+        "member": False,
+    },
 ]
+
+
+def ensure_menu_data(db: Session) -> None:
+    """菜单种子：兼容老库中“系统管理”作为页面存在的情况。"""
+    resources = list(db.scalars(select(Resource).order_by(Resource.id.asc())).all())
+    by_path = {row.web_url: row for row in resources if row.web_url}
+    by_key: dict[str, Resource] = {}
+
+    for seed in MENU_SEEDS:
+        parent = by_key.get(seed["parent"]) if seed["parent"] else None
+        parent_id = parent.id if parent else 0
+        entity = None
+        if seed["path"]:
+            entity = by_path.get(seed["path"])
+        if entity is None and seed["parent"] is None:
+            entity = next(
+                (
+                    row
+                    for row in resources
+                    if row.pid == 0 and row.name == seed["name"]
+                ),
+                None,
+            )
+        if entity is None:
+            entity = Resource(
+                name=seed["name"],
+                pid=parent_id,
+                sort=seed["sort"],
+                enable="Y",
+                icon_name=seed["icon"],
+                web_url=seed["path"],
+            )
+            db.add(entity)
+            db.flush()
+            resources.append(entity)
+        else:
+            entity.name = seed["name"]
+            entity.pid = parent_id
+            entity.sort = seed["sort"]
+            entity.icon_name = seed["icon"]
+            entity.web_url = seed["path"]
+        by_key[seed["key"]] = entity
+
+    owner = db.scalar(select(Role).where(Role.code == "OWNER"))
+    member = db.scalar(select(Role).where(Role.code == "MEMBER"))
+    if owner is not None:
+        assigned = {
+            row.resource_id
+            for row in db.scalars(
+                select(RoleResource).where(RoleResource.role_id == owner.id)
+            ).all()
+        }
+        for entity in by_key.values():
+            if entity.id not in assigned:
+                db.add(RoleResource(role_id=owner.id, resource_id=entity.id))
+
+    if member is not None:
+        has_assignment = db.scalar(
+            select(RoleResource.id).where(RoleResource.role_id == member.id).limit(1)
+        )
+        if has_assignment is None:
+            default_keys = {seed["key"] for seed in MENU_SEEDS if seed["member"]}
+            for key, entity in by_key.items():
+                if key in default_keys:
+                    db.add(RoleResource(role_id=member.id, resource_id=entity.id))
+
+    db.commit()
 
 
 def ensure_seed_data(db: Session) -> None:
@@ -66,15 +228,8 @@ def ensure_seed_data(db: Session) -> None:
         if row is None:
             db.add(Switch(switch_key=key, switch_name=name, enabled=default))
 
-    if db.scalar(select(Resource)) is None:
-        owner = db.scalar(select(Role).where(Role.code == "OWNER"))
-        for name, icon, url, sort in MENU_SEEDS:
-            resource = Resource(name=name, icon_name=icon, web_url=url, sort=sort)
-            db.add(resource)
-            db.flush()
-            if owner is not None:
-                db.add(RoleResource(role_id=owner.id, resource_id=resource.id))
-    db.commit()
+    db.flush()
+    ensure_menu_data(db)
 
 
 def has_users(db: Session) -> bool:

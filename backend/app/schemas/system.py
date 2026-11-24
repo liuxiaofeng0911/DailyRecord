@@ -82,3 +82,40 @@ class OrgOut(CamelModel):
     org_name: str
     status: str
     pid: StrId | None = None
+    remark: str | None = None
+
+
+class OrgSaveRequest(CamelModel):
+    id: StrId | None = None
+    org_code: str = Field(min_length=1, max_length=50)
+    org_name: str = Field(min_length=1, max_length=50)
+    status: str = "Y"
+    pid: StrId | None = "0"
+    remark: str | None = None
+
+
+class OrgIdRequest(CamelModel):
+    id: StrId
+
+
+class MenuSaveRequest(CamelModel):
+    id: StrId | None = None
+    name: str = Field(min_length=1, max_length=52)
+    path: str = ""
+    icon: str | None = None
+    pid: StrId | None = "0"
+    sort: int = 0
+    enable: str = "Y"
+
+
+class MenuIdRequest(CamelModel):
+    id: StrId
+
+
+class RoleMenusRequest(CamelModel):
+    role_id: StrId
+
+
+class RoleMenusSaveRequest(CamelModel):
+    role_id: StrId
+    menu_ids: list[StrId] = Field(default_factory=list)
