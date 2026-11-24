@@ -138,24 +138,50 @@ MENU_SEEDS = [
 ]
 
 
+def _system_group(resources: list[Resource], child_paths: set[str]) -> Resource | None:
+    """定位“系统管理”分组，兼容老库中分组被误当作“用户管理”页面的情况。"""
+    for row in resources:
+        if row.name == "系统管理":
+            return row
+    # 老数据 bug：分组行 pid 指向自身，导致整棵系统菜单不在根节点上
+    for row in resources:
+        if row.pid == row.id:
+            return row
+    parents = {row.pid for row in resources if row.web_url in child_paths}
+    for row in resources:
+        if row.id in parents:
+            return row
+    return None
+
+
 def ensure_menu_data(db: Session) -> None:
-    """菜单种子：兼容老库中“系统管理”作为页面存在的情况。"""
+    """菜单种子：兼容老库中“系统管理”分组被页面占用的历史数据。"""
     resources = list(db.scalars(select(Resource).order_by(Resource.id.asc())).all())
     by_path = {row.web_url: row for row in resources if row.web_url}
     by_key: dict[str, Resource] = {}
+    claimed: set[int] = set()
+    system_paths = {
+        seed["path"]
+        for seed in MENU_SEEDS
+        if seed["parent"] == "system" and seed["path"]
+    }
 
     for seed in MENU_SEEDS:
         parent = by_key.get(seed["parent"]) if seed["parent"] else None
         parent_id = parent.id if parent else 0
         entity = None
-        if seed["path"]:
+        if seed["key"] == "system":
+            entity = _system_group(resources, system_paths)
+        elif seed["path"]:
             entity = by_path.get(seed["path"])
+            if entity is not None and entity.id in claimed:
+                entity = None
         if entity is None and seed["parent"] is None:
             entity = next(
                 (
                     row
                     for row in resources
-                    if row.pid == 0 and row.name == seed["name"]
+                    if row.pid == 0 and row.name == seed["name"] and row.id not in claimed
                 ),
                 None,
             )
@@ -171,12 +197,15 @@ def ensure_menu_data(db: Session) -> None:
             db.add(entity)
             db.flush()
             resources.append(entity)
+            if seed["path"]:
+                by_path[seed["path"]] = entity
         else:
             entity.name = seed["name"]
             entity.pid = parent_id
             entity.sort = seed["sort"]
             entity.icon_name = seed["icon"]
             entity.web_url = seed["path"]
+        claimed.add(entity.id)
         by_key[seed["key"]] = entity
 
     owner = db.scalar(select(Role).where(Role.code == "OWNER"))

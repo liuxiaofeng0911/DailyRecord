@@ -3,11 +3,12 @@
 import logging
 import math
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import ChangeLog, DailyEntry, JobRun, Photo
+from ..models import ChangeLog, ComUser, DailyEntry, JobRun, Photo
 from . import credential_service, storage
 from .immich import ImmichError
 from .timeutil import now_shanghai, today_shanghai
@@ -125,6 +126,61 @@ async def purge_expired(db: Session, limit: int = PURGE_LIMIT) -> dict:
             failed.append(str(photo.id))
     db.commit()
     return {"purged": len(rows) - len(failed), "failed": failed}
+
+
+async def migrate_local_to_immich(db: Session) -> dict:
+    """把历史本机存储照片迁入各账号自己的 Immich 相册。"""
+    rows = list(
+        db.scalars(
+            select(Photo)
+            .where(Photo.storage_kind == "local")
+            .order_by(Photo.id.asc())
+        ).all()
+    )
+    clients = {}
+    migrated = 0
+    failed: list[dict] = []
+    for photo in rows:
+        try:
+            user = db.get(ComUser, photo.user_id)
+            if user is None:
+                raise RuntimeError("照片所属用户不存在")
+            client = clients.get(photo.user_id)
+            if client is None:
+                client = credential_service.user_client(db, photo.user_id)
+                if client is None:
+                    await credential_service.ensure_credential(db, user)
+                    client = credential_service.user_client(db, photo.user_id)
+                if client is None:
+                    raise RuntimeError("照片库未开通或凭据不可用")
+                clients[photo.user_id] = client
+            path = Path(photo.local_path or "")
+            if not photo.local_path or not path.is_file():
+                raise RuntimeError("本地文件不存在")
+            content = path.read_bytes()
+            asset = await client.upload_asset(
+                f"dailyrecord-{photo.id}{path.suffix or '.jpg'}",
+                content,
+                photo.mime_type or "application/octet-stream",
+                photo.taken_at or now_shanghai(),
+                album_id=credential_service.album_of(db, photo.user_id),
+            )
+            photo.storage_kind = "immich"
+            photo.immich_asset_id = asset["id"]
+            photo.local_path = None
+            photo.origin = "upload"
+            db.add(photo)
+            db.commit()
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("迁移后删除本地文件失败: %s", path)
+            migrated += 1
+        except Exception as exc:  # noqa: BLE001 - 单张失败不阻塞其余照片
+            db.rollback()
+            logger.warning("照片迁移失败: id=%s error=%s", photo.id, exc)
+            failed.append({"id": str(photo.id), "error": str(exc)[:200]})
+    return {"total": len(rows), "migrated": migrated, "failed": failed}
 
 
 async def run_purge_job(db: Session, run_key: str | None = None) -> dict:

@@ -1,3 +1,5 @@
+from app.models import Resource
+from app.services.bootstrap import ensure_menu_data
 from tests.conftest import auth_headers, register_user, set_switch
 
 
@@ -121,6 +123,28 @@ def test_menu_crud_and_member_visibility(client, crypt, db):
 
     forbidden = client.post("/system/menu/tree", headers=auth_headers(member), json={}).json()
     assert forbidden["code"] == 403
+
+
+def test_repair_legacy_system_group_data(client, crypt, db):
+    owner = bearer(client, crypt)
+    system = next(node for node in menus(client, owner) if node["name"] == "系统管理")
+    group = db.get(Resource, int(system["id"]))
+    # 模拟生产老数据：分组行被“用户管理”占用并自引用，导致整组菜单丢失
+    group.name = "用户管理"
+    group.web_url = "/System/User"
+    group.pid = group.id
+    db.commit()
+
+    ensure_menu_data(db)
+    db.expire_all()
+
+    repaired = menus(client, owner)
+    assert [node["name"] for node in repaired] == ["今天", "时间线", "统计", "系统管理"]
+    repaired_system = next(node for node in repaired if node["name"] == "系统管理")
+    assert repaired_system["path"] == ""
+    child_names = [child["name"] for child in repaired_system["children"]]
+    assert child_names.count("用户管理") == 1
+    assert len(flatten(repaired)) == 11
 
 
 def test_org_crud_and_guards(client, crypt):

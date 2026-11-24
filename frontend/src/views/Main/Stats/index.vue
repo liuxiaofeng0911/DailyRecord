@@ -12,91 +12,93 @@
     </div>
 
     <a-spin :spinning="loading">
-      <div class="metric-grid">
-        <div class="surface metric">
-          <span>记录天数</span>
-          <strong>{{ overview.totals.days }}</strong>
+      <div class="page-sections">
+        <div class="metric-grid">
+          <div class="surface metric">
+            <span>记录天数</span>
+            <strong>{{ overview.totals.days }}</strong>
+          </div>
+          <div class="surface metric">
+            <span>照片数量</span>
+            <strong>{{ overview.totals.photos }}</strong>
+          </div>
+          <div class="surface metric">
+            <span>当前连续</span>
+            <strong>{{ overview.totals.currentStreak }} 天</strong>
+          </div>
+          <div class="surface metric">
+            <span>最长连续</span>
+            <strong>{{ overview.totals.longestStreak }} 天</strong>
+          </div>
         </div>
-        <div class="surface metric">
-          <span>照片数量</span>
-          <strong>{{ overview.totals.photos }}</strong>
-        </div>
-        <div class="surface metric">
-          <span>当前连续</span>
-          <strong>{{ overview.totals.currentStreak }} 天</strong>
-        </div>
-        <div class="surface metric">
-          <span>最长连续</span>
-          <strong>{{ overview.totals.longestStreak }} 天</strong>
-        </div>
-      </div>
 
-      <section class="surface">
-        <div class="row-between section-head">
-          <strong>{{ year }} 年记录热力图</strong>
-          <span class="muted">点击方块进入当天</span>
-        </div>
-        <Heatmap :year="year" :days="overview.days" @select="openDay" />
-      </section>
-
-      <section class="surface">
-        <div class="row-between section-head">
-          <strong>月度签到率</strong>
-        </div>
-        <BaseChart
-          :option="monthOption"
-          :height="280"
-          aria-label="月度签到率柱状图，纵轴为 0 到 100%"
-          @chart-click="onMonthClick"
-        />
-        <a-table
-          class="month-table"
-          size="small"
-          :columns="monthColumns"
-          :data-source="monthRows"
-          :pagination="false"
-          row-key="month"
-          :scroll="{ x: 420 }"
-        />
-      </section>
-
-      <div class="chart-grid">
         <section class="surface">
           <div class="row-between section-head">
-            <strong>情绪分布</strong>
-            <span class="muted">按记录天数</span>
+            <strong>{{ year }} 年记录热力图</strong>
+            <span class="muted">点击方块进入当天</span>
           </div>
-          <BaseChart
-            v-if="overview.moods.length"
-            :option="moodOption"
-            :height="280"
-            aria-label="情绪分布环形图"
-          />
-          <a-empty v-else description="这一年还没有记录情绪" />
+          <Heatmap :year="year" :days="overview.days" @select="openDay" />
         </section>
 
         <section class="surface">
           <div class="row-between section-head">
-            <strong>常用标签</strong>
-            <span class="muted">Top 12</span>
+            <strong>月度签到率</strong>
           </div>
           <BaseChart
-            v-if="overview.topTags.length"
-            :option="tagOption"
+            :option="monthOption"
             :height="280"
-            aria-label="常用标签横向条形图"
+            aria-label="月度签到率柱状图，纵轴为 0 到 100%"
+            @chart-click="onMonthClick"
           />
-          <a-empty v-else description="这一年还没有标签" />
+          <a-table
+            class="month-table"
+            size="small"
+            :columns="monthColumns"
+            :data-source="monthRows"
+            :pagination="false"
+            row-key="month"
+            :scroll="{ x: 420 }"
+          />
+        </section>
+
+        <div class="chart-grid">
+          <section class="surface">
+            <div class="row-between section-head">
+              <strong>情绪分布</strong>
+              <span class="muted">按记录天数</span>
+            </div>
+            <BaseChart
+              v-if="overview.moods.length"
+              :option="moodOption"
+              :height="280"
+              aria-label="情绪分布环形图"
+            />
+            <a-empty v-else description="这一年还没有记录情绪" />
+          </section>
+
+          <section class="surface">
+            <div class="row-between section-head">
+              <strong>常用标签</strong>
+              <span class="muted">Top 12</span>
+            </div>
+            <BaseChart
+              v-if="overview.topTags.length"
+              :option="tagOption"
+              :height="280"
+              aria-label="常用标签横向条形图"
+            />
+            <a-empty v-else description="这一年还没有标签" />
+          </section>
+        </div>
+
+        <section class="surface">
+          <div class="row-between section-head">
+            <strong>近 30 天记录</strong>
+            <span class="muted">有记录即打卡</span>
+          </div>
+          <BaseChart :option="recentOption" :height="220" aria-label="近 30 天记录折线图" />
         </section>
       </div>
-
-      <section class="surface">
-        <div class="row-between section-head">
-          <strong>近 30 天记录</strong>
-          <span class="muted">有记录即打卡</span>
-        </div>
-        <BaseChart :option="recentOption" :height="220" aria-label="近 30 天记录折线图" />
-      </section>
     </a-spin>
   </div>
 </template>
@@ -377,7 +379,7 @@ onActivated(() => {
 .stats-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-7);
 }
 
 .head-actions {
@@ -389,7 +391,7 @@ onActivated(() => {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 20px;
 }
 
 .metric {
@@ -419,7 +421,7 @@ onActivated(() => {
 .chart-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 24px;
 }
 
 @media (max-width: 768px) {

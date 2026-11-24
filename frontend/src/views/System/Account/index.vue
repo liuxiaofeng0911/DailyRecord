@@ -339,7 +339,7 @@ onMounted(() => {
 .account-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-7);
 }
 
 .section-head {

@@ -80,6 +80,17 @@ def provision_immich() -> None:
                 print(f"开通失败 {user.userid}: {error}")
 
 
+def migrate_photos() -> None:
+    with SessionLocal() as db:
+        result = asyncio.run(photo_service.migrate_local_to_immich(db))
+        print(
+            f"照片迁移完成：共 {result['total']} 张，成功 {result['migrated']} 张，"
+            f"失败 {len(result['failed'])} 张"
+        )
+        for item in result["failed"]:
+            print(f"  失败 {item['id']}: {item['error']}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="DailyRecord 运维工具")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -94,6 +105,7 @@ def main() -> None:
 
     sub.add_parser("purge-photos", help="清理回收站中到期照片")
     sub.add_parser("provision-immich", help="为所有未开通账号补开通 Immich 照片库")
+    sub.add_parser("migrate-photos", help="把本机存储的历史照片迁入 Immich 照片库")
 
     args = parser.parse_args()
     if args.command == "reset-password":
@@ -104,6 +116,8 @@ def main() -> None:
         purge_photos()
     elif args.command == "provision-immich":
         provision_immich()
+    elif args.command == "migrate-photos":
+        migrate_photos()
 
 
 if __name__ == "__main__":

@@ -229,7 +229,7 @@ onMounted(load)
 .system-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-7);
 }
 
 .icon-cell {
