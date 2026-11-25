@@ -64,7 +64,7 @@
 
 @media (max-width: 768px) {
   .page {
-    padding: var(--space-4) var(--space-4) 88px;
+    padding: var(--space-4) var(--space-4) calc(88px + env(safe-area-inset-bottom));
   }
 
   .surface {

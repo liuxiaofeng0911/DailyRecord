@@ -150,6 +150,25 @@ function isLocalVideo(photo) {
   opacity: 1;
 }
 
+/* 触屏设备没有 hover，操作按钮需常驻显示，并放大点击区域 */
+@media (hover: none), (pointer: coarse) {
+  .photo-actions {
+    opacity: 1;
+
+    button {
+      width: 34px;
+      height: 34px;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .photo-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+  }
+}
+
 .caption {
   position: absolute;
   left: 0;

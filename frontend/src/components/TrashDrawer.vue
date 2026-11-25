@@ -3,7 +3,7 @@
     :open="visible"
     title="照片回收站"
     placement="right"
-    :width="520"
+    :width="'min(520px, 100vw)'"
     @update:open="visible = $event"
   >
     <div class="trash-head">

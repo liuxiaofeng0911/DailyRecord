@@ -81,6 +81,12 @@ class Settings(BaseSettings):
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    @property
+    def previews_dir(self) -> Path:
+        path = self.data_dir / "previews"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
 
 @lru_cache
 def get_settings() -> Settings:

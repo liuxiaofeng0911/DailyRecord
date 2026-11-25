@@ -1,9 +1,12 @@
 .auth-shell {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
   background:
     radial-gradient(1200px 600px at 20% 10%, rgba(32, 144, 255, 0.18), transparent 60%),
     radial-gradient(900px 500px at 80% 90%, rgba(126, 87, 255, 0.16), transparent 60%),
