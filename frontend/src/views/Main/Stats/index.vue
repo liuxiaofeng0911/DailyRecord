@@ -391,7 +391,7 @@ onActivated(() => {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 .metric {
@@ -421,7 +421,7 @@ onActivated(() => {
 .chart-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 20px;
 }
 
 @media (max-width: 768px) {
