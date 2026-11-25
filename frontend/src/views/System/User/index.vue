@@ -26,6 +26,7 @@
         :pagination="false"
         row-key="id"
         size="middle"
+        :scroll="{ x: 960 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'active'">

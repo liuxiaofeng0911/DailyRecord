@@ -70,7 +70,8 @@
               <span class="muted photo-hint">共 {{ photos.length }} 个素材</span>
             </div>
             <div class="photo-actions">
-              <a-button :loading="uploading" @click="triggerUpload">上传</a-button>
+              <a-button :loading="uploading" :disabled="uploading" @click="triggerUpload">上传</a-button>
+              <a-button v-if="mobile" :disabled="uploading" @click="triggerCamera">拍照</a-button>
               <a-button @click="openImmich">从照片库导入</a-button>
               <a-button @click="trashOpen = true">
                 回收站<span v-if="trashCount" class="trash-count">{{ trashCount }}</span>
@@ -97,6 +98,14 @@
             type="file"
             accept="image/*,video/*,.heic,.heif,.avif,.mp4,.mov,.m4v,.webm,.mkv,.avi,.3gp"
             multiple
+            hidden
+            @change="onFilesSelected"
+          />
+          <input
+            ref="cameraInput"
+            type="file"
+            accept="image/*,video/*"
+            capture="environment"
             hidden
             @change="onFilesSelected"
           />
@@ -192,6 +201,7 @@ const saving = ref(false)
 const uploading = ref(false)
 const uploadPercent = ref(0)
 const fileInput = ref(null)
+const cameraInput = ref(null)
 const dirty = ref(false)
 const lastUpdated = ref(null)
 const historyOpen = ref(false)
@@ -206,6 +216,7 @@ const immichAssets = ref([])
 const selectedAssets = ref([])
 
 const dateValue = computed(() => dayjs(date.value))
+const mobile = computed(() => store.state.app.mobile)
 const moodOptions = computed(() =>
   (store.state.dict.groups.MOOD || []).map((item) => ({ label: item.name, value: item.name })),
 )
@@ -351,6 +362,10 @@ function triggerUpload() {
   fileInput.value?.click()
 }
 
+function triggerCamera() {
+  cameraInput.value?.click()
+}
+
 async function onFilesSelected(event) {
   const files = [...(event.target.files || [])]
   event.target.value = ''
@@ -380,12 +395,22 @@ async function uploadFiles(files) {
       message.warning(result.errors.map((item) => `${item.filename}: ${item.reason}`).join('；'))
     }
     message.success(`已上传 ${result.photos.length} 个文件`)
+    mergePhotos(result.photos)
     bumpVersions()
-    await load()
+  } catch {
+    // 失败提示由 axios 拦截器统一展示，这里只保证不再整页刷新、不丢失未保存内容
   } finally {
     uploading.value = false
     uploadPercent.value = 0
   }
+}
+
+/* 上传后只合并新照片，避免 load() 覆盖尚未保存的文字、心情与标签 */
+function mergePhotos(list) {
+  if (!list?.length) return
+  const map = new Map(photos.value.map((photo) => [photo.id, photo]))
+  list.forEach((photo) => map.set(photo.id, { ...map.get(photo.id), ...photo }))
+  photos.value = [...map.values()]
 }
 
 function onPaste(event) {
@@ -709,6 +734,21 @@ onBeforeUnmount(() => {
   .header-actions {
     width: 100%;
     justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .row-between {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .photo-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .paste-hint {
+    display: none;
   }
 }
 </style>

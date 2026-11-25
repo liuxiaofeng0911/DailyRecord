@@ -3,7 +3,7 @@
     :open="visible"
     title="修改记录"
     placement="right"
-    :width="420"
+    :width="'min(420px, 100vw)'"
     @update:open="visible = $event"
   >
     <div class="history-head">

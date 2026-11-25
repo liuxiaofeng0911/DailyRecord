@@ -165,14 +165,33 @@ const mobileTabs = computed(() => {
   }))
 })
 
-const userMenu = computed(() => ({
-  items: [
+const userMenu = computed(() => {
+  const items = []
+  // 手机端侧栏隐藏、底部 Tab 只放 4 个，其余菜单收进头像下拉，保证系统页可达
+  if (mobile.value) {
+    const tabPaths = new Set(mobileTabs.value.map((item) => item.path))
+    const menus = store.state.auth.menus.length ? store.state.auth.menus : FALLBACK_MENUS
+    const extra = flattenMenus(menus).filter(
+      (node) => node.path && !tabPaths.has(node.path) && node.path !== '/System/Account',
+    )
+    if (extra.length) {
+      items.push(
+        ...extra.map((node) => ({
+          key: node.path,
+          label: node.name,
+          icon: () => h(AppIcon, { name: node.icon || resolveNavIcon(node.path), size: 16 }),
+        })),
+        { type: 'divider' },
+      )
+    }
+  }
+  items.push(
     { key: 'account', label: '账户设置' },
     { type: 'divider' },
     { key: 'logout', label: '退出登录' },
-  ],
-  onClick: onUserMenu,
-}))
+  )
+  return { items, onClick: onUserMenu }
+})
 
 function toggleCollapse() {
   store.commit('app/setCollapsed', !store.state.app.collapsed)
@@ -183,6 +202,10 @@ function onMenuClick({ key }) {
 }
 
 async function onUserMenu({ key }) {
+  if (String(key).startsWith('/')) {
+    router.push(key)
+    return
+  }
   if (key === 'account') {
     router.push('/System/Account')
     return
@@ -251,6 +274,8 @@ onBeforeUnmount(() => {
   height: 56px;
   line-height: 1;
   padding: 0 16px;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -332,12 +357,20 @@ onBeforeUnmount(() => {
   min-height: calc(100vh - 56px);
 }
 
+@media (max-width: 768px) {
+  .app-content {
+    min-height: calc(100dvh - 56px);
+  }
+}
+
 .mobile-tabs {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 58px;
+  height: auto;
+  min-height: 58px;
+  padding-bottom: env(safe-area-inset-bottom);
   display: flex;
   background: var(--app-bg-container);
   border-top: 1px solid var(--app-border);
@@ -350,6 +383,7 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: center;
     gap: 3px;
+    min-height: 56px;
     border: none;
     background: transparent;
     color: var(--app-text-3);

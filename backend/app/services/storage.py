@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 try:  # iPhone 的 HEIC/HEIF 需要额外解码器；缺失时仍支持其他格式
     from pillow_heif import register_heif_opener
@@ -66,6 +66,8 @@ VIDEO_EXTS = {
     "hevc": "video/hevc",
 }
 CHUNK = 1024 * 1024
+# 本地图片预览最长边，避免手机端网格加载数 MB 原图
+PREVIEW_MAX_EDGE = 1280
 
 
 def max_bytes() -> int:
@@ -122,7 +124,10 @@ def _convert_to_jpeg(content: bytes) -> bytes:
     try:
         with Image.open(io.BytesIO(content)) as image:
             image.load()
-            frame = image.convert("RGB") if image.mode not in ("RGB", "L") else image.copy()
+            # 手机拍摄的照片方向记录在 EXIF 中，转换时必须先摆正，否则会横倒
+            frame = ImageOps.exif_transpose(image)
+            if frame.mode not in ("RGB", "L"):
+                frame = frame.convert("RGB")
             buffer = io.BytesIO()
             frame.save(buffer, format="JPEG", quality=92)
             return buffer.getvalue()
@@ -145,6 +150,13 @@ def inspect_media(filename: str, content: bytes, content_type: str) -> dict:
         with Image.open(io.BytesIO(content)) as image:
             image_format = (image.format or "").upper()
             width, height = image.size
+            try:
+                orientation = image.getexif().get(274, 1)
+            except (AttributeError, OSError, ValueError):
+                orientation = 1
+        # EXIF 方向为 90/270 度时，实际显示尺寸需要交换宽高
+        if orientation in (5, 6, 7, 8):
+            width, height = height, width
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ApiError(
             codes.BAD_REQUEST,
@@ -219,6 +231,32 @@ async def store(
     }
 
 
+def _preview_file(photo: Photo) -> Path:
+    return settings.data_dir / "previews" / str(photo.user_id) / f"{photo.id}.jpg"
+
+
+def _local_preview(photo: Photo, source: Path) -> tuple[bytes, str]:
+    cache = _preview_file(photo)
+    if cache.exists():
+        return cache.read_bytes(), "image/jpeg"
+    try:
+        with Image.open(source) as image:
+            image.load()
+            frame = ImageOps.exif_transpose(image)
+            frame.thumbnail((PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE))
+            if frame.mode not in ("RGB", "L"):
+                frame = frame.convert("RGB")
+            buffer = io.BytesIO()
+            frame.save(buffer, format="JPEG", quality=82)
+            data = buffer.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        logger.warning("生成缩略图失败，退化为原图: %s", exc)
+        return source.read_bytes(), photo.mime_type or "application/octet-stream"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_bytes(data)
+    return data, "image/jpeg"
+
+
 async def read_bytes(
     photo: Photo, size: str = "preview", client: ImmichClient | None = None
 ) -> tuple[bytes, str]:
@@ -233,10 +271,16 @@ async def read_bytes(
     path = Path(photo.local_path)
     if not path.exists():
         raise FileNotFoundError("照片文件不存在")
+    if size != "original" and photo.media_type == "IMAGE":
+        return _local_preview(photo, path)
     return path.read_bytes(), photo.mime_type or "application/octet-stream"
 
 
 def delete_local(photo: Photo) -> None:
+    try:
+        _preview_file(photo).unlink(missing_ok=True)
+    except OSError as exc:  # pragma: no cover
+        logger.warning("删除本地缩略图失败: %s", exc)
     if photo.storage_kind != "local" or not photo.local_path:
         return
     try:

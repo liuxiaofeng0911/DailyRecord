@@ -16,6 +16,7 @@
         row-key="id"
         size="middle"
         :default-expand-all-rows="true"
+        :scroll="{ x: 1000 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'icon'">

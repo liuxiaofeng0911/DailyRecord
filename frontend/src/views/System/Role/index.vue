@@ -9,7 +9,14 @@
     </div>
 
     <section class="surface">
-      <a-table :columns="columns" :data-source="rows" :loading="loading" row-key="id" size="middle">
+      <a-table
+        :columns="columns"
+        :data-source="rows"
+        :loading="loading"
+        row-key="id"
+        size="middle"
+        :scroll="{ x: 640 }"
+      >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'enable'">
             <a-tag :color="record.enable === 'Y' ? 'green' : 'default'">

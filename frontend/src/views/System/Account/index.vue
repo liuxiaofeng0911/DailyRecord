@@ -55,6 +55,7 @@
           :pagination="false"
           row-key="id"
           size="small"
+          :scroll="{ x: 660 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'device'">

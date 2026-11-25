@@ -21,7 +21,14 @@
         <a-button @click="load">刷新</a-button>
       </div>
 
-      <a-table :columns="columns" :data-source="rows" :loading="loading" row-key="id" size="middle">
+      <a-table
+        :columns="columns"
+        :data-source="rows"
+        :loading="loading"
+        row-key="id"
+        size="middle"
+        :scroll="{ x: 560 }"
+      >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'action'">
             <a-button type="link" size="small" @click="openEdit(record)">编辑</a-button>
@@ -143,6 +150,7 @@ onMounted(load)
 
 .filter-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 16px;
 }
