@@ -94,7 +94,7 @@ async def security_headers(request: Request, call_next):
 
 @app.exception_handler(ApiError)
 async def api_error_handler(_request: Request, exc: ApiError):
-    return JSONResponse(status_code=exc.http_status, content=fail(exc.code, exc.message))
+    return JSONResponse(status_code=exc.http_status, content=fail(exc.code, exc.message, exc.data))
 
 
 @app.exception_handler(RequestValidationError)

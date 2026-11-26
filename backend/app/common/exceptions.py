@@ -4,11 +4,18 @@ from . import codes
 class ApiError(Exception):
     """业务异常：默认 HTTP 200 + 业务 code，符合 BigTrans 前端契约。"""
 
-    def __init__(self, code: int = codes.BAD_REQUEST, message: str = "操作失败", http_status: int = 200):
+    def __init__(
+        self,
+        code: int = codes.BAD_REQUEST,
+        message: str = "操作失败",
+        http_status: int = 200,
+        data: dict | None = None,
+    ):
         super().__init__(message)
         self.code = code
         self.message = message
         self.http_status = http_status
+        self.data = data
 
 
 def bad_request(message: str = "参数错误") -> ApiError:

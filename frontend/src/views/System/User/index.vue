@@ -75,7 +75,11 @@
     >
       <a-form layout="vertical">
         <a-form-item label="登录账号">
-          <a-input v-model:value="editor.userid" :disabled="Boolean(editor.id)" />
+          <a-input
+            v-model:value="editor.userid"
+            :disabled="Boolean(editor.id)"
+            placeholder="2-32 位字母、数字、下划线或中文"
+          />
         </a-form-item>
         <a-form-item label="显示名">
           <a-input v-model:value="editor.username" />

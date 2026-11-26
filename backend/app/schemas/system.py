@@ -18,7 +18,7 @@ class SystemUserOut(CamelModel):
 
 class UserSaveRequest(CamelModel):
     id: StrId | None = None
-    userid: str = Field(min_length=3, max_length=32)
+    userid: str = Field(min_length=2, max_length=32)
     username: str = Field(min_length=1, max_length=64)
     email: str = Field(max_length=255)
     password: str | None = None

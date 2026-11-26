@@ -48,9 +48,21 @@ from ..services.timeutil import now_shanghai
 
 router = APIRouter(prefix="/auth", tags=["auth"], dependencies=[Depends(xss_guard)])
 
-USERID_RE = re.compile(r"^[A-Za-z0-9_]{3,32}$")
+USERID_RE = re.compile(r"^[A-Za-z0-9_\u4e00-\u9fff]{2,32}$")
+USERID_RULE = "登录账号需为 2-32 位字母、数字、下划线或中文"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_FAILED = 5
+REGISTER_LIMIT = 5
+REGISTER_WINDOW_SECONDS = 600
+
+
+def _wait_text(seconds: int) -> str:
+    minutes, rest = divmod(max(int(seconds), 0), 60)
+    if minutes and rest:
+        return f"{minutes} 分 {rest} 秒"
+    if minutes:
+        return f"{minutes} 分钟"
+    return f"{rest} 秒"
 
 
 def _set_cookie(response: Response, token: str) -> None:
@@ -125,13 +137,10 @@ async def register(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    if not ratelimit.allow(f"register:{client_ip(request)}", limit=3, window_seconds=3600):
-        raise ApiError(codes.BAD_REQUEST, "注册过于频繁，请稍后再试")
-
     userid = payload.userid.strip()
     email = payload.email.strip().lower()
     if not USERID_RE.match(userid):
-        raise bad_request("登录账号需为 3-32 位字母、数字或下划线")
+        raise bad_request(USERID_RULE)
     if not EMAIL_RE.match(email):
         raise bad_request("邮箱格式不正确")
 
@@ -160,6 +169,16 @@ async def register(
     ).first()
     if duplicated is not None:
         raise ApiError(codes.DUPLICATE_REGISTER, "账号或邮箱已被注册")
+
+    # 限流放在表单校验之后：填错信息不会消耗注册额度
+    rate_key = f"register:{client_ip(request)}"
+    if not ratelimit.allow(rate_key, limit=REGISTER_LIMIT, window_seconds=REGISTER_WINDOW_SECONDS):
+        wait = ratelimit.retry_after(rate_key, REGISTER_LIMIT, REGISTER_WINDOW_SECONDS)
+        raise ApiError(
+            codes.BAD_REQUEST,
+            f"注册过于频繁，请 {_wait_text(wait)}后再试",
+            data={"retryAfter": wait},
+        )
 
     role_code = "OWNER" if _is_first_account(db, first_user) else "MEMBER"
     role = db.scalars(select(Role).where(Role.code == role_code)).first()
