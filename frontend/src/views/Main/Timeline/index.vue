@@ -126,7 +126,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import HistoryDrawer from '@/components/HistoryDrawer.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import { resolveMoodIcon, resolveTagIcon } from '@/store/icon'
-import { useAutoRefresh } from '@/utils'
+import { moodNames, useAutoRefresh } from '@/utils'
 
 defineOptions({ name: 'Timeline' })
 
@@ -167,7 +167,10 @@ const presets = [
 ]
 
 const moodOptions = computed(() =>
-  (store.state.dict.groups.MOOD || []).map((item) => ({ label: item.name, value: item.name })),
+  moodNames((store.state.dict.groups.MOOD || []).map((item) => item.name)).map((name) => ({
+    label: name,
+    value: name,
+  })),
 )
 
 const groups = computed(() => {

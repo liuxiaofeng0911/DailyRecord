@@ -12,6 +12,12 @@ class TagOut(CamelModel):
     icon: str | None = None
 
 
+class TagSuggestOut(CamelModel):
+    id: StrId
+    name: str
+    uses: int = 0
+
+
 class PhotoOut(CamelModel):
     id: StrId
     entry_id: StrId | None = None
