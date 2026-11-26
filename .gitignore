@@ -24,6 +24,7 @@ backend/test_data/
 test_data/
 logs/
 secrets/
+backups/
 *.log
 
 # artifacts
