@@ -36,6 +36,32 @@ export function draftKey(userId, date) {
   return `dr:draft:${userId}:${date}`
 }
 
+/** 心情分类：正向 / 中性 / 负向 · 消耗，字典中的其他情绪归入「其他」。 */
+export const MOOD_CATEGORIES = [
+  { label: '正向', moods: ['开心', '兴奋', '愉悦'] },
+  { label: '中性', moods: ['平静', '复杂', '放松'] },
+  { label: '负向 · 消耗', moods: ['疲惫', '麻木', '低落', '怅然', '委屈', '烦躁', '焦虑'] },
+]
+
+/** 合并固定分类与字典扩展项，返回分组后的下拉选项。 */
+export function buildMoodGroups(names = []) {
+  const known = new Set(MOOD_CATEGORIES.flatMap((item) => item.moods))
+  const groups = MOOD_CATEGORIES.map(({ label, moods }) => ({
+    label,
+    options: moods.map((name) => ({ value: name, label: name })),
+  }))
+  const extras = names
+    .filter((name) => name && !known.has(name))
+    .map((name) => ({ value: name, label: name }))
+  if (extras.length) groups.push({ label: '其他', options: extras })
+  return groups
+}
+
+/** 扁平的完整心情名称列表，用于筛选等只需要名称的场景。 */
+export function moodNames(names = []) {
+  return buildMoodGroups(names).flatMap((group) => group.options.map((option) => option.value))
+}
+
 export function debounce(fn, wait = 300) {
   let timer = null
   return (...args) => {

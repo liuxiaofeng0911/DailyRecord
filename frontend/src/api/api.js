@@ -48,6 +48,7 @@ export const statsApi = {
 
 export const tagApi = {
   list: () => Post('/tag/list'),
+  suggest: () => Post('/tag/suggest'),
   save: (payload) => Post('/tag/save', payload),
 }
 
