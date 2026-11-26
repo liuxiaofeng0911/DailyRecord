@@ -57,7 +57,8 @@ router = APIRouter(
     dependencies=[Depends(xss_guard), Depends(get_current_user), Depends(require_owner)],
 )
 
-USERID_RE = re.compile(r"^[A-Za-z0-9_]{3,32}$")
+USERID_RE = re.compile(r"^[A-Za-z0-9_\u4e00-\u9fff]{2,32}$")
+USERID_RULE = "登录账号需为 2-32 位字母、数字、下划线或中文"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -171,7 +172,7 @@ def user_save(
     userid = payload.userid.strip()
     email = payload.email.strip().lower()
     if not USERID_RE.match(userid):
-        raise bad_request("登录账号需为 3-32 位字母、数字或下划线")
+        raise bad_request(USERID_RULE)
     if not EMAIL_RE.match(email):
         raise bad_request("邮箱格式不正确")
     _validate_unique(db, userid, email, int(payload.id) if payload.id else None)

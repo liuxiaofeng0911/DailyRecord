@@ -2,7 +2,7 @@ import { Get, Post, Upload } from './axios'
 
 export const authApi = {
   publicKey: () => Get('/auth/publicKey'),
-  register: (payload) => Post('/auth/register', payload),
+  register: (payload) => Post('/auth/register', payload, { silent: true }),
   login: (payload) => Post('/auth/login', payload, { silent: true }),
   logout: () => Post('/auth/logout'),
   me: () => Post('/auth/me'),

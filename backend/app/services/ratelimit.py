@@ -4,6 +4,7 @@
 """
 
 import logging
+import math
 import threading
 import time
 from collections import defaultdict, deque
@@ -28,6 +29,17 @@ class _MemoryLimiter:
                 return False
             bucket.append(now)
             return True
+
+    def retry_after(self, key: str, limit: int, window_seconds: int) -> int:
+        now = time.time()
+        with self._lock:
+            bucket = self._hits[key]
+            while bucket and bucket[0] <= now - window_seconds:
+                bucket.popleft()
+            if len(bucket) < limit:
+                return 0
+            # 最早的计数滑出窗口后即可再次尝试
+            return max(1, math.ceil(bucket[0] + window_seconds - now))
 
 
 _memory = _MemoryLimiter()
@@ -67,6 +79,21 @@ def allow(key: str, limit: int, window_seconds: int) -> bool:
         return int(count) <= limit
     except Exception:  # pragma: no cover
         return _memory.allow(key, limit, window_seconds)
+
+
+def retry_after(key: str, limit: int, window_seconds: int) -> int:
+    """返回还需等待多少秒才能再次尝试；0 表示当前未被限流。
+
+    仅在 allow() 返回 False 后调用，用于告诉用户准确的等待时间。
+    """
+    client = _redis()
+    if client is None:
+        return _memory.retry_after(key, limit, window_seconds)
+    try:
+        ttl = client.ttl(f"dr:rate:{key}")
+        return max(int(ttl), 0)
+    except Exception:  # pragma: no cover
+        return _memory.retry_after(key, limit, window_seconds)
 
 
 def reset() -> None:
