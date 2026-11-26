@@ -79,4 +79,11 @@ export const systemApi = {
   dictSave: (payload) => Post('/system/dict/save', payload),
   switchGet: () => Post('/system/switch/get'),
   switchSave: (payload) => Post('/system/switch/save', payload),
+  inviteList: () => Post('/system/invite/list'),
+  inviteCreate: (payload) => Post('/system/invite/create', payload),
+}
+
+export const orgShareApi = {
+  members: (payload) => Post('/org-share/members', payload),
+  entries: (payload) => Post('/org-share/entries', payload),
 }

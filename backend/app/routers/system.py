@@ -27,6 +27,8 @@ from ..schemas.system import (
     DictListRequest,
     DictOut,
     DictSaveRequest,
+    InviteCreateRequest,
+    InviteOut,
     MenuIdRequest,
     MenuSaveRequest,
     OrgIdRequest,
@@ -44,7 +46,7 @@ from ..schemas.system import (
 )
 from ..security import rsa
 from ..security.password import hash_password, validate_password_strength
-from ..services import menu_service
+from ..services import invite_service, menu_service
 from ..services.auth_service import revoke_all_sessions, role_code_of
 from ..services.bootstrap import has_users
 from ..services.timeutil import now_shanghai
@@ -624,6 +626,47 @@ def switch_save(
     row.update_time = now_shanghai()
     db.commit()
     return ok({row.switch_key: row.enabled})
+
+
+@router.post("/invite/list")
+def invite_list(
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    now = now_shanghai()
+    rows = invite_service.list_invites(db)
+    data = [
+        InviteOut(
+            id=row.id,
+            created_at=row.insert_time,
+            expires_at=row.expires_at,
+            used=row.used_at is not None,
+            used_at=row.used_at,
+            expired=row.used_at is None and bool(row.expires_at and row.expires_at < now),
+            remark=row.remark,
+        )
+        for row in rows
+    ]
+    return ok(data)
+
+
+@router.post("/invite/create")
+def invite_create(
+    payload: InviteCreateRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    code, invite = invite_service.create_invite(
+        db, user.id, days=payload.days, remark=payload.remark
+    )
+    db.commit()
+    return ok(
+        {
+            "id": str(invite.id),
+            "code": code,
+            "expiresAt": invite.expires_at.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
 
 
 __all__ = ["router", "has_users", "UserSession"]

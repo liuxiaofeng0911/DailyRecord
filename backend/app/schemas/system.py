@@ -76,6 +76,21 @@ class SwitchSaveRequest(CamelModel):
     enabled: str
 
 
+class InviteCreateRequest(CamelModel):
+    days: int = 7
+    remark: str | None = None
+
+
+class InviteOut(CamelModel):
+    id: StrId
+    created_at: DateTimeStr | None = None
+    expires_at: DateTimeStr | None = None
+    used: bool = False
+    used_at: OptDateTimeStr = None
+    expired: bool = False
+    remark: str | None = None
+
+
 class OrgOut(CamelModel):
     id: StrId
     org_code: str

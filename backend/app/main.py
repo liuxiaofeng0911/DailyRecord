@@ -113,7 +113,18 @@ async def unhandled_error_handler(_request: Request, exc: Exception):
     return JSONResponse(status_code=500, content=fail(codes.SERVER_ERROR, "服务器异常，请稍后再试"))
 
 
-from .routers import auth, entry, export, immich, photo, search, stats, system, tag  # noqa: E402
+from .routers import (  # noqa: E402
+    auth,
+    entry,
+    export,
+    immich,
+    org_share,
+    photo,
+    search,
+    stats,
+    system,
+    tag,
+)
 
 app.include_router(auth.router)
 app.include_router(entry.router)
@@ -124,6 +135,7 @@ app.include_router(immich.router)
 app.include_router(export.router)
 app.include_router(search.router)
 app.include_router(system.router)
+app.include_router(org_share.router)
 
 
 @app.get("/health")

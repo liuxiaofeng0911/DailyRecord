@@ -24,11 +24,50 @@
             任何知道地址的人都可以注册，适合家庭内网或短期开放。建议用完及时关闭。
           </p>
           <p v-else>
-            注册时必须填写有效邀请码。邀请码通过服务器命令
-            <code>python -m app.cli create-invite --days 7</code> 生成。
+            注册时必须填写有效邀请码，可在下方「邀请码」中生成后发给家人。
           </p>
         </div>
       </a-spin>
+    </section>
+
+    <section class="surface">
+      <div class="row-between section-head">
+        <strong>邀请码</strong>
+        <a-space>
+          <a-input-number v-model:value="inviteDays" :min="1" :max="30" size="small" />
+          <span class="muted">天后过期</span>
+          <a-button type="primary" size="small" :loading="inviteCreating" @click="createInvite">
+            生成邀请码
+          </a-button>
+        </a-space>
+      </div>
+      <a-alert v-if="newInvite.code" type="success" show-icon style="margin-bottom: 12px">
+        <template #message>新邀请码（仅展示这一次，请立即复制）</template>
+        <template #description>
+          <div class="invite-code">
+            <code>{{ newInvite.code }}</code>
+            <a-button size="small" @click="copyInvite">复制</a-button>
+          </div>
+          <p class="muted">有效期至 {{ newInvite.expiresAt }}</p>
+        </template>
+      </a-alert>
+      <a-table
+        :columns="inviteColumns"
+        :data-source="invites"
+        row-key="id"
+        size="small"
+        :pagination="false"
+        :loading="inviteLoading"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <a-tag :color="inviteStatus(record).color">{{ inviteStatus(record).text }}</a-tag>
+          </template>
+        </template>
+      </a-table>
+      <p class="muted info-text invite-tip">
+        邀请码只保存加密摘要，创建后无法再次查看，遗失请重新生成。
+      </p>
     </section>
 
     <section class="surface">
@@ -75,7 +114,7 @@
 
 <script setup>
 import { message } from 'antdv-next'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import { immichApi, systemApi } from '@/api/api'
 
@@ -85,6 +124,17 @@ const switches = ref({})
 const registerMode = ref('CLOSED')
 const photoStatus = ref({ enabled: false, available: false, message: '' })
 const photoLoading = ref(false)
+const inviteDays = ref(7)
+const invites = ref([])
+const inviteLoading = ref(false)
+const inviteCreating = ref(false)
+const newInvite = reactive({ code: '', expiresAt: '' })
+
+const inviteColumns = [
+  { title: '生成时间', dataIndex: 'createdAt', key: 'createdAt', width: 180 },
+  { title: '有效期至', dataIndex: 'expiresAt', key: 'expiresAt', width: 180 },
+  { title: '状态', key: 'status', width: 100 },
+]
 
 const aiEnabled = computed(() => switches.value.DAILYRECORD_AI_ENABLED === '1')
 const bootstrapDone = computed(() => switches.value.DAILYRECORD_BOOTSTRAP_DONE === 'Y')
@@ -130,6 +180,43 @@ async function saveRegisterMode() {
   }
 }
 
+function inviteStatus(record) {
+  if (record.used) return { text: '已使用', color: 'default' }
+  if (record.expired) return { text: '已过期', color: 'orange' }
+  return { text: '可用', color: 'green' }
+}
+
+async function loadInvites() {
+  inviteLoading.value = true
+  try {
+    invites.value = (await systemApi.inviteList()) || []
+  } finally {
+    inviteLoading.value = false
+  }
+}
+
+async function createInvite() {
+  inviteCreating.value = true
+  try {
+    const data = await systemApi.inviteCreate({ days: inviteDays.value || 7 })
+    newInvite.code = data?.code || ''
+    newInvite.expiresAt = data?.expiresAt || ''
+    message.success('邀请码已生成')
+    loadInvites()
+  } finally {
+    inviteCreating.value = false
+  }
+}
+
+async function copyInvite() {
+  try {
+    await navigator.clipboard.writeText(newInvite.code)
+    message.success('邀请码已复制')
+  } catch {
+    message.warning('复制失败，请手动选择邀请码复制')
+  }
+}
+
 async function loadImmich() {
   photoLoading.value = true
   try {
@@ -143,6 +230,7 @@ async function loadImmich() {
 
 onMounted(() => {
   load()
+  loadInvites()
   loadImmich()
 })
 </script>
@@ -166,19 +254,32 @@ onMounted(() => {
   p {
     margin: 0 0 6px;
   }
-
-  code {
-    padding: 1px 6px;
-    border-radius: 6px;
-    background: var(--app-bg-body);
-    color: var(--app-primary);
-  }
 }
 
 .info-text {
   margin: 0 0 var(--space-2);
   line-height: 1.8;
   font-size: 13px;
+}
+
+.invite-code {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: 6px;
+
+  code {
+    padding: 2px 10px;
+    border-radius: 6px;
+    background: var(--app-bg-body);
+    color: var(--app-primary);
+    font-size: 14px;
+    word-break: break-all;
+  }
+}
+
+.invite-tip {
+  margin: 12px 0 0;
 }
 
 .photo-head {

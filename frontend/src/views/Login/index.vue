@@ -37,8 +37,6 @@
             登录
           </a-button>
         </a-form>
-
-        <p class="footnote">数据完全存储在自家服务器，仅你与家人可见。</p>
       </div>
     </div>
   </div>
@@ -102,12 +100,5 @@ async function submit() {
 
 .remember-row {
   margin-bottom: 18px;
-}
-
-.footnote {
-  margin: 18px 0 0;
-  font-size: 12px;
-  color: var(--app-text-3);
-  text-align: center;
 }
 </style>
