@@ -19,9 +19,22 @@
           style="margin-bottom: 16px"
         />
 
+        <a-alert
+          v-if="cooldown > 0"
+          type="warning"
+          show-icon
+          :message="`注册过于频繁，请 ${waitText}后再试`"
+          description="同一网络 10 分钟内最多注册 5 次，稍等片刻即可继续。"
+          style="margin-bottom: 16px"
+        />
+
         <a-form layout="vertical" @submit.prevent="submit">
           <a-form-item label="登录账号">
-            <a-input v-model:value="form.userid" size="large" placeholder="3-32 位字母、数字或下划线" />
+            <a-input
+              v-model:value="form.userid"
+              size="large"
+              placeholder="2-32 位字母、数字、下划线或中文"
+            />
           </a-form-item>
           <a-form-item label="显示名">
             <a-input v-model:value="form.username" size="large" placeholder="在界面上如何称呼你" />
@@ -56,7 +69,7 @@
             size="large"
             block
             :loading="loading"
-            :disabled="!registration.canRegister"
+            :disabled="!registration.canRegister || cooldown > 0"
             @click="submit"
           >
             注册并登录
@@ -73,7 +86,7 @@
 
 <script setup>
 import { message } from 'antdv-next'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
@@ -86,6 +99,37 @@ const router = useRouter()
 const store = useStore()
 const loading = ref(false)
 const registration = reactive({ loaded: false, canRegister: true, mode: 'CLOSED' })
+
+const USERID_PATTERN = /^[A-Za-z0-9_\u4e00-\u9fff]{2,32}$/
+const cooldown = ref(0)
+const waitText = computed(() => formatWait(cooldown.value))
+let cooldownTimer = null
+
+function formatWait(seconds) {
+  const total = Math.max(0, Math.ceil(seconds))
+  const minutes = Math.floor(total / 60)
+  const rest = total % 60
+  if (minutes && rest) return `${minutes} 分 ${rest} 秒`
+  if (minutes) return `${minutes} 分钟`
+  return `${rest} 秒`
+}
+
+function startCooldown(seconds) {
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  cooldown.value = Math.max(0, Math.ceil(seconds))
+  if (!cooldown.value) return
+  cooldownTimer = setInterval(() => {
+    cooldown.value = Math.max(0, cooldown.value - 1)
+    if (!cooldown.value) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = null
+    }
+  }, 1000)
+}
+
+onBeforeUnmount(() => {
+  if (cooldownTimer) clearInterval(cooldownTimer)
+})
 
 onMounted(async () => {
   try {
@@ -114,6 +158,10 @@ async function submit() {
     message.warning('请完整填写账号、显示名和邮箱')
     return
   }
+  if (!USERID_PATTERN.test(form.userid.trim())) {
+    message.warning('登录账号需为 2-32 位字母、数字、下划线或中文')
+    return
+  }
   if (form.password.length < 10) {
     message.warning('密码至少 10 位')
     return
@@ -139,7 +187,12 @@ async function submit() {
     message.success('注册成功，开始记录吧')
     router.push('/Main/Today')
   } catch (error) {
-    message.error(error?.message || '注册失败')
+    const retryAfter = Number(error?.data?.retryAfter || 0)
+    if (retryAfter > 0) {
+      startCooldown(retryAfter)
+    } else {
+      message.error(error?.message || '注册失败')
+    }
   } finally {
     loading.value = false
   }
