@@ -40,3 +40,43 @@ class SharedEntryOut(CamelModel):
     user_id: StrId
     userid: str = ""
     username: str = ""
+
+
+class MyShareOrgOut(CamelModel):
+    id: StrId
+    org_name: str
+    org_code: str
+    share_enabled: bool = True
+    is_member: bool = False
+
+
+class ShareConfigRequest(CamelModel):
+    org_id: StrId | None = None
+
+
+class ShareConfigOut(CamelModel):
+    id: StrId
+    org_name: str
+    org_code: str
+    share_enabled: bool = True
+    is_member: bool = False
+    is_owner: bool = False
+    members: list[ShareMemberOut] = Field(default_factory=list)
+    allow_ids: list[StrId] = Field(default_factory=list)
+    watch_ids: list[StrId] = Field(default_factory=list)
+
+
+class ShareConfigSaveRequest(CamelModel):
+    org_id: StrId
+    allow_ids: list[StrId] = Field(default_factory=list)
+    watch_ids: list[StrId] = Field(default_factory=list)
+
+
+class MyShareEntriesRequest(CamelModel):
+    org_id: StrId | None = None
+    start: date | None = None
+    end: date | None = None
+    keyword: str | None = None
+    page: dict | None = None
+    page_number: int | None = None
+    page_size: int | None = None

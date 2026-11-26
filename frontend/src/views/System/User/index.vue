@@ -26,13 +26,19 @@
         :pagination="false"
         row-key="id"
         size="middle"
-        :scroll="{ x: 960 }"
+        :scroll="{ x: 1120 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'active'">
             <a-tag :color="record.userActive === 'Y' ? 'green' : 'default'">
               {{ record.userActive === 'Y' ? '启用' : '禁用' }}
             </a-tag>
+          </template>
+          <template v-else-if="column.key === 'orgs'">
+            <a-space v-if="record.orgs?.length" :size="4" wrap>
+              <a-tag v-for="org in record.orgs" :key="org.id" color="blue">{{ org.name }}</a-tag>
+            </a-space>
+            <span v-else class="muted">-</span>
           </template>
           <template v-else-if="column.key === 'locked'">
             <a-tag v-if="record.lockedUntil" color="orange">锁定中</a-tag>
@@ -149,6 +155,7 @@ const columns = [
   { title: '显示名', dataIndex: 'username', key: 'username', width: 120 },
   { title: '邮箱', dataIndex: 'email', key: 'email', ellipsis: true },
   { title: '角色', dataIndex: 'roleCode', key: 'roleCode', width: 100 },
+  { title: '所属组织', key: 'orgs', width: 180 },
   { title: '状态', key: 'active', width: 90 },
   { title: '锁定', key: 'locked', width: 90 },
   { title: '最近登录', dataIndex: 'loginTime', key: 'loginTime', width: 170 },

@@ -25,7 +25,7 @@ from ..schemas.photo import (
     TrashListRequest,
     UploadResult,
 )
-from ..services import audit, credential_service, photo_service, storage
+from ..services import audit, credential_service, photo_service, share_service, storage
 from ..services.entry_service import clear_cover
 from ..services.immich import ImmichError
 from ..services.ollama import OllamaError, describe_image
@@ -166,6 +166,13 @@ def list_photos(
     return ok([PhotoOut.model_validate(row) for row in rows])
 
 
+def _can_read_photo(db: Session, user: UserContext, photo: Photo) -> bool:
+    """本人、所有者可读；组织共享双向可见的成员也可读取对方共享记录中的照片。"""
+    if photo.user_id == user.id or user.is_owner:
+        return True
+    return share_service.can_view_shared_entries(db, user.id, photo.user_id)
+
+
 @router.get("/thumbnail/{photo_id}")
 async def thumbnail(
     photo_id: int,
@@ -173,7 +180,7 @@ async def thumbnail(
     user: UserContext = Depends(get_current_user),
 ):
     photo = db.scalars(select(Photo).where(Photo.id == photo_id)).first()
-    if photo is None or (photo.user_id != user.id and not user.is_owner):
+    if photo is None or not _can_read_photo(db, user, photo):
         return JSONResponse(status_code=404, content={"code": 404, "message": "照片不存在"})
     client = credential_service.user_client(db, photo.user_id)
     if photo.storage_kind == "immich" and client is None:
@@ -199,7 +206,7 @@ async def original(
     user: UserContext = Depends(get_current_user),
 ):
     photo = db.scalars(select(Photo).where(Photo.id == photo_id)).first()
-    if photo is None or (photo.user_id != user.id and not user.is_owner):
+    if photo is None or not _can_read_photo(db, user, photo):
         return JSONResponse(status_code=404, content={"code": 404, "message": "照片不存在"})
     client = credential_service.user_client(db, photo.user_id)
     if photo.storage_kind == "immich" and client is None:

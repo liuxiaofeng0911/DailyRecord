@@ -7,7 +7,7 @@
     @update:open="visible = $event"
   >
     <p class="muted share-hint">
-      按组织查看成员的每日记录，方便家人之间互相了解近况；普通成员看不到他人记录。
+      按组织查看成员的每日记录；所有者不属于组织，组织共享暂停时仍可查看全部成员记录。
     </p>
 
     <div class="share-filters">
