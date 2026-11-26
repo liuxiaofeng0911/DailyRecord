@@ -96,6 +96,46 @@ class UserOrg(Base):
     org_id: Mapped[int] = mapped_column(BigInteger, default=1)
 
 
+class OrgShareConfig(Base):
+    """组织级共享总开关：缺少记录时按开启处理。"""
+
+    __tablename__ = "t_org_share_config"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    org_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True, index=True)
+    enabled: Mapped[str] = mapped_column(String(1), nullable=False, default="Y")
+    insert_time: Mapped[datetime] = mapped_column(DateTime, default=now_shanghai)
+    update_time: Mapped[datetime] = mapped_column(DateTime, default=now_shanghai, onupdate=now_shanghai)
+    insert_user: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    update_user: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    version: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
+class OrgShareRule(Base):
+    """组织内双向可见配置。
+
+    kind=ALLOW：user_id 允许 target_id 查看自己的记录；
+    kind=WATCH：user_id 希望查看 target_id 的记录。
+    两个方向都命中时才会展示对方记录。
+    """
+
+    __tablename__ = "t_org_share_rule"
+    __table_args__ = (
+        UniqueConstraint("org_id", "user_id", "target_id", "kind", name="uq_t_org_share_rule_scope"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    org_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    target_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    insert_time: Mapped[datetime] = mapped_column(DateTime, default=now_shanghai)
+    update_time: Mapped[datetime] = mapped_column(DateTime, default=now_shanghai, onupdate=now_shanghai)
+    insert_user: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    update_user: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    version: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
 class Resource(Base):
     __tablename__ = "t_um_resource"
 

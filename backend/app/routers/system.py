@@ -32,8 +32,10 @@ from ..schemas.system import (
     MenuIdRequest,
     MenuSaveRequest,
     OrgIdRequest,
+    OrgMembersSaveRequest,
     OrgOut,
     OrgSaveRequest,
+    OrgShareSwitchRequest,
     ResetPasswordRequest,
     RoleMenusRequest,
     RoleMenusSaveRequest,
@@ -42,11 +44,12 @@ from ..schemas.system import (
     SwitchSaveRequest,
     SystemUserOut,
     UserIdRequest,
+    UserOrgOut,
     UserSaveRequest,
 )
 from ..security import rsa
 from ..security.password import hash_password, validate_password_strength
-from ..services import invite_service, menu_service
+from ..services import invite_service, menu_service, share_service
 from ..services.auth_service import revoke_all_sessions, role_code_of
 from ..services.bootstrap import has_users
 from ..services.timeutil import now_shanghai
@@ -60,6 +63,33 @@ router = APIRouter(
 USERID_RE = re.compile(r"^[A-Za-z0-9_\u4e00-\u9fff]{2,32}$")
 USERID_RULE = "登录账号需为 2-32 位字母、数字、下划线或中文"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _user_orgs_map(db: Session, user_ids: list[int]) -> dict[int, list[UserOrgOut]]:
+    """批量读取用户所属组织，支持同一用户存在多个组织。"""
+    if not user_ids:
+        return {}
+    rows = db.scalars(select(UserOrg).where(UserOrg.user_id.in_(user_ids))).all()
+    org_ids: set[int] = set()
+    for row in rows:
+        try:
+            org_ids.add(int(row.company_id))
+        except (TypeError, ValueError):
+            continue
+    orgs = {
+        org.id: org for org in db.scalars(select(Org).where(Org.id.in_(org_ids))).all()
+    } if org_ids else {}
+    result: dict[int, list[UserOrgOut]] = {}
+    for row in rows:
+        try:
+            org = orgs.get(int(row.company_id))
+        except (TypeError, ValueError):
+            org = None
+        if org is not None:
+            result.setdefault(row.user_id, []).append(
+                UserOrgOut(id=org.id, name=org.org_name, code=org.org_code)
+            )
+    return result
 
 
 @router.post("/user/list")
@@ -97,6 +127,7 @@ def user_list(
         .offset((page_number - 1) * page_size)
         .limit(page_size)
     ).all()
+    orgs_map = _user_orgs_map(db, [row.id for row in rows])
     data = [
         SystemUserOut(
             id=row.id,
@@ -109,6 +140,7 @@ def user_list(
             login_time=row.login_time,
             insert_time=row.insert_time,
             locked_until=row.locked_until,
+            orgs=orgs_map.get(row.id, []),
         )
         for row in rows
     ]
@@ -138,6 +170,7 @@ def user_get(
             login_time=row.login_time,
             insert_time=row.insert_time,
             locked_until=row.locked_until,
+            orgs=_user_orgs_map(db, [row.id]).get(row.id, []),
         )
     )
 
@@ -325,6 +358,7 @@ def org_tree(
     user: UserContext = Depends(get_current_user),
 ):
     rows = db.scalars(select(Org).order_by(Org.pid.asc(), Org.id.asc())).all()
+    enabled = share_service.org_share_enabled_map(db, None)
     data = [
         OrgOut(
             id=row.id,
@@ -333,6 +367,7 @@ def org_tree(
             status=row.status,
             pid=str(row.pid or 0),
             remark=row.remark,
+            share_enabled=enabled.get(row.id, True),
         )
         for row in rows
     ]
@@ -422,6 +457,83 @@ def org_delete(
     db.delete(entity)
     db.commit()
     return ok(None, "组织已删除")
+
+
+@router.post("/org/members")
+def org_members(
+    payload: OrgIdRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    org_id = int(payload.id)
+    if db.get(Org, org_id) is None:
+        raise not_found("组织不存在")
+    members = share_service.org_members(db, org_id, include_children=False)
+    candidates = share_service.org_members(db, None, include_children=True)
+    return ok(
+        {
+            "orgId": str(org_id),
+            "memberIds": [str(member.id) for member in members],
+            "candidates": share_service.serialize_members(db, candidates),
+        }
+    )
+
+
+@router.post("/org/members/save")
+def org_members_save(
+    payload: OrgMembersSaveRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    org_id = int(payload.id)
+    if db.get(Org, org_id) is None:
+        raise not_found("组织不存在")
+    try:
+        wanted = {int(item) for item in payload.user_ids}
+    except (TypeError, ValueError):
+        raise bad_request("成员参数不正确") from None
+    available = {member.id for member in share_service.org_members(db, None)}
+    if wanted - available:
+        raise bad_request("存在不可用或不存在的人员")
+
+    existing = {
+        row.user_id: row
+        for row in db.scalars(
+            select(UserOrg).where(UserOrg.company_id == str(org_id))
+        ).all()
+    }
+    for user_id, row in existing.items():
+        if user_id not in wanted:
+            db.delete(row)
+    for user_id in wanted - set(existing):
+        db.add(
+            UserOrg(
+                user_id=user_id,
+                company_id=str(org_id),
+                insert_user=user.userid,
+            )
+        )
+    db.commit()
+    return ok({"orgId": str(org_id), "memberIds": [str(item) for item in sorted(wanted)]})
+
+
+@router.post("/org/shareSwitch")
+def org_share_switch(
+    payload: OrgShareSwitchRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    org_id = int(payload.id)
+    if db.get(Org, org_id) is None:
+        raise not_found("组织不存在")
+    share_service.set_org_share_enabled(db, org_id, payload.enabled, user.userid)
+    db.commit()
+    return ok(
+        {
+            "orgId": str(org_id),
+            "shareEnabled": share_service.org_share_enabled(db, org_id),
+        }
+    )
 
 
 @router.post("/menu/tree")
