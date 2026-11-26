@@ -1,7 +1,21 @@
 import { systemApi } from '@/api/api'
 
 const FALLBACK = {
-  MOOD: ['开心', '平静', '疲惫', '低落', '兴奋'].map((name) => ({
+  MOOD: [
+    '开心',
+    '兴奋',
+    '愉悦',
+    '平静',
+    '复杂',
+    '放松',
+    '疲惫',
+    '麻木',
+    '低落',
+    '怅然',
+    '委屈',
+    '烦躁',
+    '焦虑',
+  ].map((name) => ({
     code: name,
     name,
   })),

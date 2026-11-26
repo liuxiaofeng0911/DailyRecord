@@ -1,6 +1,15 @@
 <template>
   <div class="photo-grid">
-    <div v-for="photo in photos" :key="photo.id" class="photo-item" :class="{ cover: photo.isCover }">
+    <div
+      v-for="(photo, index) in photos"
+      :key="photo.id"
+      class="photo-item"
+      :class="{ cover: photo.isCover }"
+      role="button"
+      tabindex="0"
+      @click="openViewer(index)"
+      @keydown.enter.self="openViewer(index)"
+    >
       <div v-if="isLocalVideo(photo)" class="video-placeholder">
         <span class="video-mark" />
         <span>视频</span>
@@ -10,12 +19,12 @@
       <div v-if="photo.isCover" class="badge cover-badge">封面</div>
       <div v-if="editable" class="photo-actions">
         <a-tooltip title="设为封面">
-          <button type="button" aria-label="设为封面" @click="$emit('cover', photo)">
+          <button type="button" aria-label="设为封面" @click.stop="$emit('cover', photo)">
             <AppIcon name="lucide:star" :size="15" />
           </button>
         </a-tooltip>
         <a-tooltip title="删除引用">
-          <button type="button" aria-label="删除引用" class="danger" @click="$emit('remove', photo)">
+          <button type="button" aria-label="删除引用" class="danger" @click.stop="$emit('remove', photo)">
             <AppIcon name="lucide:trash-2" :size="15" />
           </button>
         </a-tooltip>
@@ -23,12 +32,16 @@
       <p v-if="photo.caption" class="caption">{{ photo.caption }}</p>
     </div>
     <slot />
+    <PhotoViewer v-model:open="viewerOpen" :photos="photos" :start-index="viewerIndex" />
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
+
 import { photoApi } from '@/api/api'
 import AppIcon from '@/components/AppIcon.vue'
+import PhotoViewer from '@/components/PhotoViewer.vue'
 
 defineProps({
   photos: { type: Array, default: () => [] },
@@ -36,12 +49,20 @@ defineProps({
 })
 defineEmits(['cover', 'remove'])
 
+const viewerOpen = ref(false)
+const viewerIndex = ref(0)
+
 function thumbUrl(photo) {
   return `${photoApi.thumbnail(photo.id)}?v=${photo.version || 0}`
 }
 
 function isLocalVideo(photo) {
   return photo.mediaType === 'VIDEO' && photo.storageKind !== 'immich'
+}
+
+function openViewer(index) {
+  viewerIndex.value = index
+  viewerOpen.value = true
 }
 </script>
 
@@ -59,12 +80,18 @@ function isLocalVideo(photo) {
   background: var(--app-bg-elevated);
   border: 1px solid var(--app-border);
   aspect-ratio: 4 / 3;
+  cursor: zoom-in;
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+    transition: transform 0.25s ease;
+  }
+
+  &:hover img {
+    transform: scale(1.03);
   }
 
   &.cover {

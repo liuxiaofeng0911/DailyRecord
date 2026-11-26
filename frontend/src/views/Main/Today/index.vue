@@ -38,28 +38,50 @@
             <a-select
               v-model:value="mood"
               :options="moodOptions"
-              placeholder="今天的心情"
+              :filter-option="filterMoodOption"
+              show-search
+              placeholder="选择或输入心情"
               allow-clear
-              style="min-width: 160px"
+              style="min-width: 180px"
+              @search="onMoodSearch"
+              @change="onMoodChange"
             >
-              <template #option="{ value }">
+              <template #optionRender="{ option }">
                 <span class="mood-option">
-                  <AppIcon :name="resolveMoodIcon(value)" :size="16" />
-                  {{ value }}
+                  <AppIcon :name="resolveMoodIcon(option.value)" :size="16" />
+                  {{ option.label }}
                 </span>
               </template>
             </a-select>
           </div>
-          <div class="meta-item grow">
+          <div class="meta-item grow tag-item">
             <span class="meta-label">标签</span>
-            <a-select
-              v-model:value="tags"
-              mode="tags"
-              :token-separators="[',', '，', ' ']"
-              placeholder="输入后回车，例如：散步、江边"
-              style="width: 100%"
-              :max-tag-count="8"
-            />
+            <div class="tag-field">
+              <a-select
+                v-model:value="tags"
+                mode="tags"
+                :options="tagOptions"
+                :token-separators="[',', '，', ' ']"
+                placeholder="输入后回车，或选择下方常用标签"
+                style="width: 100%"
+                :max-tag-count="8"
+              />
+              <div v-if="recentTags.length" class="tag-quick">
+                <span class="quick-label">常用</span>
+                <button
+                  v-for="tag in recentTags"
+                  :key="tag.id"
+                  type="button"
+                  class="tag-chip"
+                  :class="{ active: tags.includes(tag.name) }"
+                  @click="toggleTag(tag.name)"
+                >
+                  <AppIcon :name="resolveTagIcon(tag.name)" :size="13" />
+                  {{ tag.name }}
+                  <em v-if="tag.uses > 1">{{ tag.uses }}</em>
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -174,14 +196,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
-import { entryApi, immichApi, photoApi } from '@/api/api'
+import { entryApi, immichApi, photoApi, tagApi } from '@/api/api'
 import AppIcon from '@/components/AppIcon.vue'
 import PhotoGrid from '@/components/PhotoGrid.vue'
 import HistoryDrawer from '@/components/HistoryDrawer.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import TrashDrawer from '@/components/TrashDrawer.vue'
-import { resolveMoodIcon } from '@/store/icon'
-import { draftKey, relativeDay, today } from '@/utils'
+import { resolveMoodIcon, resolveTagIcon } from '@/store/icon'
+import { buildMoodGroups, draftKey, moodNames, relativeDay, today } from '@/utils'
 
 defineOptions({ name: 'Today' })
 
@@ -207,6 +229,9 @@ const lastUpdated = ref(null)
 const historyOpen = ref(false)
 const trashOpen = ref(false)
 const trashCount = ref(0)
+const tagOptions = ref([])
+const recentTags = ref([])
+const moodSearch = ref('')
 
 const immichOpen = ref(false)
 const immichLoading = ref(false)
@@ -217,9 +242,50 @@ const selectedAssets = ref([])
 
 const dateValue = computed(() => dayjs(date.value))
 const mobile = computed(() => store.state.app.mobile)
-const moodOptions = computed(() =>
-  (store.state.dict.groups.MOOD || []).map((item) => ({ label: item.name, value: item.name })),
-)
+const dictMoods = computed(() => (store.state.dict.groups.MOOD || []).map((item) => item.name))
+const moodOptions = computed(() => {
+  const groups = buildMoodGroups(dictMoods.value)
+  const text = moodSearch.value.trim()
+  if (text && !moodNames(dictMoods.value).includes(text)) {
+    return [{ label: '自定义', options: [{ value: text, label: `使用「${text}」` }] }, ...groups]
+  }
+  return groups
+})
+
+function filterMoodOption(input, option) {
+  if (!input) return true
+  return String(option?.label ?? option?.value ?? '')
+    .toLowerCase()
+    .includes(input.toLowerCase())
+}
+
+function onMoodSearch(value) {
+  moodSearch.value = value || ''
+}
+
+/* 自定义心情直接写库，长度与 daily_entry.mood 字段保持一致 */
+function onMoodChange(value) {
+  moodSearch.value = ''
+  if (typeof value !== 'string') return
+  const text = value.trim().slice(0, 32)
+  if (text !== value) mood.value = text || null
+}
+
+function toggleTag(name) {
+  tags.value = tags.value.includes(name)
+    ? tags.value.filter((item) => item !== name)
+    : [...tags.value, name]
+}
+
+async function loadTagData() {
+  try {
+    const [list, suggest] = await Promise.all([tagApi.list(), tagApi.suggest()])
+    tagOptions.value = list.map((tag) => ({ label: tag.name, value: tag.name }))
+    recentTags.value = suggest || []
+  } catch {
+    // 标签建议失败不影响记录本身，失败提示由 axios 拦截器统一展示
+  }
+}
 
 watch([note, mood, tags], () => {
   saveDraft()
@@ -339,6 +405,7 @@ async function save() {
     clearDraft()
     dirty.value = false
     bumpVersions()
+    loadTagData()
     message.success('已保存今天的记录')
   } catch (error) {
     if (error?.code === 1009) {
@@ -541,6 +608,7 @@ onBeforeRouteLeave(() => {
 
 onMounted(() => {
   load()
+  loadTagData()
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('beforeunload', onBeforeUnload)
   window.addEventListener('paste', onPaste)
@@ -618,6 +686,65 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.tag-item {
+  align-items: flex-start;
+
+  .meta-label {
+    padding-top: 6px;
+  }
+}
+
+.tag-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tag-quick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.quick-label {
+  font-size: 12px;
+  color: var(--app-text-3);
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-pill);
+  background: var(--app-bg-elevated);
+  color: var(--app-text-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  em {
+    font-style: normal;
+    font-size: 10px;
+    color: var(--app-text-3);
+  }
+
+  &:hover {
+    border-color: var(--app-primary);
+    color: var(--app-primary);
+  }
+
+  &.active {
+    border-color: var(--app-primary);
+    background: var(--app-primary-weak);
+    color: var(--app-primary);
+  }
 }
 
 .photo-hint {
