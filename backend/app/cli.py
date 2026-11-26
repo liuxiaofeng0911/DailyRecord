@@ -8,18 +8,14 @@
 
 import argparse
 import asyncio
-import hashlib
-import secrets
-from datetime import timedelta
 
 from sqlalchemy import func, select
 
 from .db import SessionLocal
-from .models import ComUser, InviteCode
+from .models import ComUser
 from .security.password import hash_password, validate_password_strength
-from .services import credential_service, photo_service
+from .services import credential_service, invite_service, photo_service
 from .services.auth_service import revoke_all_sessions
-from .services.timeutil import now_shanghai
 
 
 def reset_password(userid: str, password: str) -> None:
@@ -40,15 +36,8 @@ def reset_password(userid: str, password: str) -> None:
 
 
 def create_invite(created_by: int, days: int) -> str:
-    code = secrets.token_urlsafe(12)
     with SessionLocal() as db:
-        db.add(
-            InviteCode(
-                code_hash=hashlib.sha256(code.encode()).hexdigest(),
-                created_by=created_by,
-                expires_at=now_shanghai() + timedelta(days=days),
-            )
-        )
+        code, _invite = invite_service.create_invite(db, created_by, days)
         db.commit()
     return code
 

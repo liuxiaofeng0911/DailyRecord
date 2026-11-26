@@ -1,4 +1,3 @@
-import hashlib
 import re
 from datetime import timedelta
 
@@ -13,7 +12,7 @@ from ..common.xss import guard as xss_guard
 from ..config import settings
 from ..db import get_db
 from ..deps import COOKIE_NAME, COOKIE_PATH, UserContext, get_current_user
-from ..models import ComUser, InviteCode, Role, Switch, UserOrg, UserRole, UserSession
+from ..models import ComUser, Role, Switch, UserOrg, UserRole, UserSession
 from ..schemas.auth import (
     ChangePasswordRequest,
     LoginData,
@@ -32,7 +31,7 @@ from ..security.password import (
     validate_password_strength,
     verify_password,
 )
-from ..services import credential_service, menu_service, ratelimit
+from ..services import credential_service, invite_service, menu_service, ratelimit
 from ..services.auth_service import (
     client_ip,
     create_session_token,
@@ -81,6 +80,19 @@ def _set_switch(db: Session, key: str, value: str) -> None:
         row.enabled = value
 
 
+def _is_first_account(db: Session, first_user: bool) -> bool:
+    """仅当系统没有任何账号且尚未存在所有者时，首个注册账号才成为所有者。"""
+    if not first_user:
+        return False
+    owner_exists = db.scalar(
+        select(UserRole.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(Role.code == "OWNER")
+        .limit(1)
+    )
+    return owner_exists is None
+
+
 def _user_info(db: Session, user: ComUser, role: str) -> UserInfo:
     return UserInfo(
         id=user.id,
@@ -91,18 +103,6 @@ def _user_info(db: Session, user: ComUser, role: str) -> UserInfo:
         role_code=role,
         create_time=user.insert_time,
     )
-
-
-def _consume_invite(db: Session, code: str, user_id: int) -> None:
-    if not code:
-        raise ApiError(codes.INVALID_INVITE, "邀请码无效")
-    code_hash = hashlib.sha256(code.strip().encode()).hexdigest()
-    invite = db.scalars(select(InviteCode).where(InviteCode.code_hash == code_hash)).first()
-    now = now_shanghai()
-    if invite is None or invite.used_at is not None or invite.expires_at < now:
-        raise ApiError(codes.INVALID_INVITE, "邀请码无效")
-    invite.used_by = user_id
-    invite.used_at = now
 
 
 @router.get("/publicKey")
@@ -140,7 +140,7 @@ async def register(
         mode = (_get_switch(db, "DAILYRECORD_REGISTER_MODE") or "CLOSED").upper()
         if mode == "CLOSED":
             raise ApiError(codes.REGISTER_CLOSED, "注册已关闭")
-        if mode == "INVITE" and not payload.invite_code:
+        if mode == "INVITE" and not (payload.invite_code or "").strip():
             raise ApiError(codes.INVALID_INVITE, "请填写邀请码")
 
     plain = rsa.decrypt(payload.password)
@@ -161,7 +161,7 @@ async def register(
     if duplicated is not None:
         raise ApiError(codes.DUPLICATE_REGISTER, "账号或邮箱已被注册")
 
-    role_code = "OWNER" if first_user else "MEMBER"
+    role_code = "OWNER" if _is_first_account(db, first_user) else "MEMBER"
     role = db.scalars(select(Role).where(Role.code == role_code)).first()
     user = ComUser(
         userid=userid,
@@ -170,7 +170,7 @@ async def register(
         password=hash_password(plain),
         password_algo="argon2id",
         user_active="Y",
-        user_type="2" if first_user else "1",
+        user_type="2" if role_code == "OWNER" else "1",
         org_id=1,
         insert_user=userid,
     )
@@ -183,7 +183,7 @@ async def register(
     db.flush()
 
     if not first_user and (_get_switch(db, "DAILYRECORD_REGISTER_MODE") or "").upper() == "INVITE":
-        _consume_invite(db, payload.invite_code, user.id)
+        invite_service.consume_invite(db, payload.invite_code, user.id)
 
     if first_user:
         _set_switch(db, "DAILYRECORD_REGISTER_MODE", "CLOSED")

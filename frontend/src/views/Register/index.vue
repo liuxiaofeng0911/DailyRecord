@@ -40,8 +40,16 @@
               @press-enter="submit"
             />
           </a-form-item>
-          <a-form-item label="邀请码（需要时填写）">
-            <a-input v-model:value="form.inviteCode" size="large" placeholder="可选" />
+          <a-form-item
+            v-if="registration.mode === 'INVITE'"
+            label="邀请码"
+            required
+          >
+            <a-input
+              v-model:value="form.inviteCode"
+              size="large"
+              placeholder="请填写所有者提供的邀请码"
+            />
           </a-form-item>
           <a-button
             type="primary"
@@ -112,6 +120,10 @@ async function submit() {
   }
   if (form.password !== form.confirmPassword) {
     message.warning('两次输入的密码不一致')
+    return
+  }
+  if (registration.mode === 'INVITE' && !form.inviteCode.trim()) {
+    message.warning('请填写邀请码')
     return
   }
   loading.value = true

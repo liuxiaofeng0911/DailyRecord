@@ -172,17 +172,15 @@ async def thumbnail(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
-    photo = db.scalars(
-        select(Photo).where(Photo.id == photo_id, Photo.user_id == user.id)
-    ).first()
-    if photo is None:
+    photo = db.scalars(select(Photo).where(Photo.id == photo_id)).first()
+    if photo is None or (photo.user_id != user.id and not user.is_owner):
         return JSONResponse(status_code=404, content={"code": 404, "message": "照片不存在"})
-    client = credential_service.user_client(db, user.id)
+    client = credential_service.user_client(db, photo.user_id)
     if photo.storage_kind == "immich" and client is None:
-        entity = db.get(ComUser, user.id)
+        entity = db.get(ComUser, photo.user_id)
         if entity is not None:
             await credential_service.ensure_credential(db, entity)
-            client = credential_service.user_client(db, user.id)
+            client = credential_service.user_client(db, photo.user_id)
     try:
         content, mime = await storage.read_bytes(photo, size="preview", client=client)
     except (FileNotFoundError, ImmichError):
@@ -200,17 +198,15 @@ async def original(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
-    photo = db.scalars(
-        select(Photo).where(Photo.id == photo_id, Photo.user_id == user.id)
-    ).first()
-    if photo is None:
+    photo = db.scalars(select(Photo).where(Photo.id == photo_id)).first()
+    if photo is None or (photo.user_id != user.id and not user.is_owner):
         return JSONResponse(status_code=404, content={"code": 404, "message": "照片不存在"})
-    client = credential_service.user_client(db, user.id)
+    client = credential_service.user_client(db, photo.user_id)
     if photo.storage_kind == "immich" and client is None:
-        entity = db.get(ComUser, user.id)
+        entity = db.get(ComUser, photo.user_id)
         if entity is not None:
             await credential_service.ensure_credential(db, entity)
-            client = credential_service.user_client(db, user.id)
+            client = credential_service.user_client(db, photo.user_id)
     try:
         content, mime = await storage.read_bytes(photo, size="original", client=client)
     except (FileNotFoundError, ImmichError):

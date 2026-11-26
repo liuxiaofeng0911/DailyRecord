@@ -5,7 +5,10 @@
         <h2 class="page-title">组织管理</h2>
         <p class="page-subtitle">维护组织层级，用户默认归属默认组织。</p>
       </div>
-      <a-button type="primary" @click="openCreate()">新增组织</a-button>
+      <a-space>
+        <a-button @click="openShare()">成员记录共享</a-button>
+        <a-button type="primary" @click="openCreate()">新增组织</a-button>
+      </a-space>
     </div>
 
     <section class="surface">
@@ -29,6 +32,7 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space>
+              <a-button type="link" size="small" @click="openShare(record)">共享记录</a-button>
               <a-button type="link" size="small" @click="openCreate(record)">新增子组织</a-button>
               <a-button type="link" size="small" @click="openEdit(record)">编辑</a-button>
               <a-button
@@ -73,6 +77,8 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <OrgShareDrawer v-model:open="shareOpen" :orgs="rows" :org-id="shareOrgId" />
   </div>
 </template>
 
@@ -81,11 +87,14 @@ import { Modal, message } from 'antdv-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { systemApi } from '@/api/api'
+import OrgShareDrawer from '@/components/OrgShareDrawer.vue'
 
 const rows = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const editorOpen = ref(false)
+const shareOpen = ref(false)
+const shareOrgId = ref('')
 const editor = reactive({
   id: null,
   pid: '0',
@@ -100,7 +109,7 @@ const columns = [
   { title: '组织编码', dataIndex: 'orgCode', key: 'orgCode', width: 160 },
   { title: '状态', key: 'status', width: 100 },
   { title: '备注', key: 'remark', ellipsis: true },
-  { title: '操作', key: 'action', width: 260 },
+  { title: '操作', key: 'action', width: 320 },
 ]
 
 const treeRows = computed(() => {
@@ -152,6 +161,11 @@ function openEdit(record) {
     remark: record.remark || '',
   })
   editorOpen.value = true
+}
+
+function openShare(record) {
+  shareOrgId.value = record?.id || ''
+  shareOpen.value = true
 }
 
 async function save() {
