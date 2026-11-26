@@ -18,10 +18,18 @@ export const NAV_ICONS = {
 
 const MOOD_ICONS = {
   开心: 'lucide:smile',
-  平静: 'lucide:waves',
-  疲惫: 'lucide:battery-low',
-  低落: 'lucide:cloud-rain',
   兴奋: 'lucide:sparkles',
+  愉悦: 'lucide:laugh',
+  平静: 'lucide:waves',
+  复杂: 'lucide:circle-help',
+  放松: 'lucide:sofa',
+  疲惫: 'lucide:battery-low',
+  麻木: 'lucide:meh',
+  低落: 'lucide:cloud-rain',
+  怅然: 'lucide:cloud-drizzle',
+  委屈: 'lucide:frown',
+  烦躁: 'lucide:flame',
+  焦虑: 'lucide:activity',
 }
 
 const TAG_KEYWORDS = [
