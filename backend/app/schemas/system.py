@@ -3,6 +3,12 @@ from pydantic import Field
 from .common import CamelModel, DateTimeStr, OptDateTimeStr, StrId
 
 
+class UserOrgOut(CamelModel):
+    id: StrId
+    name: str
+    code: str = ""
+
+
 class SystemUserOut(CamelModel):
     id: StrId
     userid: str
@@ -14,6 +20,7 @@ class SystemUserOut(CamelModel):
     login_time: str | None = None
     insert_time: DateTimeStr | None = None
     locked_until: OptDateTimeStr = None
+    orgs: list[UserOrgOut] = Field(default_factory=list)
 
 
 class UserSaveRequest(CamelModel):
@@ -98,6 +105,7 @@ class OrgOut(CamelModel):
     status: str
     pid: StrId | None = None
     remark: str | None = None
+    share_enabled: bool = True
 
 
 class OrgSaveRequest(CamelModel):
@@ -111,6 +119,16 @@ class OrgSaveRequest(CamelModel):
 
 class OrgIdRequest(CamelModel):
     id: StrId
+
+
+class OrgMembersSaveRequest(CamelModel):
+    id: StrId
+    user_ids: list[StrId] = Field(default_factory=list)
+
+
+class OrgShareSwitchRequest(CamelModel):
+    id: StrId
+    enabled: bool = True
 
 
 class MenuSaveRequest(CamelModel):

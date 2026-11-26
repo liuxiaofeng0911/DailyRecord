@@ -3,7 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import ComUser, GeneralCode, Org, Resource, Role, RoleResource, Switch
+from ..models import ComUser, GeneralCode, Org, Resource, Role, RoleResource, Switch, UserOrg
 
 DICT_SEEDS: dict[str, list[tuple[str, str]]] = {
     "MOOD": [
@@ -72,11 +72,20 @@ MENU_SEEDS = [
         "member": True,
     },
     {
+        "key": "share",
+        "name": "共享",
+        "icon": "lucide:share-2",
+        "path": "/Main/Share",
+        "sort": 4,
+        "parent": None,
+        "member": True,
+    },
+    {
         "key": "system",
         "name": "系统管理",
         "icon": "lucide:settings",
         "path": "",
-        "sort": 4,
+        "sort": 5,
         "parent": None,
         "member": True,
     },
@@ -230,14 +239,16 @@ def ensure_menu_data(db: Session) -> None:
                 db.add(RoleResource(role_id=owner.id, resource_id=entity.id))
 
     if member is not None:
-        has_assignment = db.scalar(
-            select(RoleResource.id).where(RoleResource.role_id == member.id).limit(1)
-        )
-        if has_assignment is None:
-            default_keys = {seed["key"] for seed in MENU_SEEDS if seed["member"]}
-            for key, entity in by_key.items():
-                if key in default_keys:
-                    db.add(RoleResource(role_id=member.id, resource_id=entity.id))
+        assigned = {
+            row.resource_id
+            for row in db.scalars(
+                select(RoleResource).where(RoleResource.role_id == member.id)
+            ).all()
+        }
+        default_keys = {seed["key"] for seed in MENU_SEEDS if seed["member"]}
+        for key, entity in by_key.items():
+            if key in default_keys and entity.id not in assigned:
+                db.add(RoleResource(role_id=member.id, resource_id=entity.id))
 
     db.commit()
 
@@ -267,6 +278,25 @@ def ensure_seed_data(db: Session) -> None:
 
     db.flush()
     ensure_menu_data(db)
+    ensure_user_org_data(db)
+
+
+def ensure_user_org_data(db: Session) -> None:
+    """为缺少组织关系的用户补齐默认组织，保证多组织成员关系有统一来源。"""
+    linked = set(db.scalars(select(UserOrg.user_id)).all())
+    org_ids = set(db.scalars(select(Org.id)).all()) or {1}
+    for user in db.scalars(select(ComUser).order_by(ComUser.id.asc())).all():
+        if user.id in linked:
+            continue
+        org_id = int(user.org_id or 1)
+        db.add(
+            UserOrg(
+                user_id=user.id,
+                company_id=str(org_id if org_id in org_ids else 1),
+                insert_user="system",
+            )
+        )
+    db.commit()
 
 
 def has_users(db: Session) -> bool:

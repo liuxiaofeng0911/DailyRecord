@@ -39,6 +39,12 @@ const routes = [
         component: () => import('@/views/Main/Stats/index.vue'),
         meta: { title: '统计' },
       },
+      {
+        path: 'Share',
+        name: 'Share',
+        component: () => import('@/views/Main/Share/index.vue'),
+        meta: { title: '共享' },
+      },
     ],
   },
   {
