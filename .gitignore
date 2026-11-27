@@ -30,6 +30,9 @@ backups/
 # artifacts
 .screenshots/
 
+# 本地设计文档（不进版本库）
+docs/
+
 # editor / os
 .idea/
 .vscode/
