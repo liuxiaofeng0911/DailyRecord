@@ -33,6 +33,9 @@ backups/
 # 本地设计文档（不进版本库）
 docs/
 
+# AI 协作地图（本地保留，不进版本库）
+AGENTS.md
+
 # editor / os
 .idea/
 .vscode/
