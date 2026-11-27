@@ -5,12 +5,12 @@
         <h2 class="page-title">共享</h2>
         <p class="page-subtitle">组织内成员双向确认后才互相可见；组织可随时暂停共享。</p>
       </div>
-      <a-space>
+      <a-space class="org-tools" wrap>
         <a-select
           v-model:value="orgId"
           :options="orgOptions"
           placeholder="选择组织"
-          style="width: 240px"
+          class="org-select"
           @change="onOrgChange"
         />
         <a-tag v-if="currentOrg" :color="currentOrg.shareEnabled ? 'green' : 'default'">
@@ -85,15 +85,16 @@
           <div class="filter-row">
             <a-range-picker
               v-model:value="filters.range"
+              class="share-range"
               format="YYYY-MM-DD"
               :placeholder="['开始日期', '结束日期']"
               @change="reloadEntries"
             />
             <a-input-search
               v-model:value="filters.keyword"
+              class="share-search"
               placeholder="搜索记录内容"
               allow-clear
-              style="width: 200px"
               @search="reloadEntries"
             />
           </div>
@@ -282,6 +283,18 @@ onMounted(async () => {
   gap: var(--space-3);
 }
 
+.org-select {
+  width: 240px;
+}
+
+.share-range {
+  width: 260px;
+}
+
+.share-search {
+  width: 200px;
+}
+
 .share-config {
   display: flex;
   flex-direction: column;
@@ -404,5 +417,34 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   margin-top: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .org-tools {
+    width: 100%;
+  }
+
+  :deep(.org-tools .ant-space-item) {
+    width: 100%;
+  }
+
+  .org-select,
+  .share-range,
+  .share-search {
+    width: 100%;
+  }
+
+  .filter-row {
+    width: 100%;
+  }
+
+  .share-photos {
+    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  }
 }
 </style>

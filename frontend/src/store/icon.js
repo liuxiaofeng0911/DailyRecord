@@ -7,6 +7,7 @@ export const NAV_ICONS = {
   '/Main/Today': 'lucide:calendar-heart',
   '/Main/Timeline': 'lucide:history',
   '/Main/Stats': 'lucide:chart-column',
+  '/Main/Share': 'lucide:share-2',
   '/System/Account': 'lucide:user-round',
   '/System/Settings': 'lucide:settings',
   '/System/User': 'lucide:users',

@@ -108,6 +108,7 @@ const FALLBACK_MENUS = [
   { id: 'f1', name: '今天', path: '/Main/Today', icon: 'lucide:calendar-heart', children: [] },
   { id: 'f2', name: '时间线', path: '/Main/Timeline', icon: 'lucide:history', children: [] },
   { id: 'f3', name: '统计', path: '/Main/Stats', icon: 'lucide:chart-column', children: [] },
+  { id: 'f5', name: '共享', path: '/Main/Share', icon: 'lucide:share-2', children: [] },
   {
     id: 'f4',
     name: '账户设置',
@@ -147,7 +148,9 @@ function flattenMenus(nodes) {
   ])
 }
 
-const MOBILE_ORDER = ['/Main/Today', '/Main/Timeline', '/Main/Stats', '/System/Account']
+// 移动端底部导航优先放业务页；账户设置收进右上角头像菜单
+const MOBILE_ORDER = ['/Main/Today', '/Main/Timeline', '/Main/Stats', '/Main/Share']
+const MOBILE_HIDDEN = new Set(['/System/Account'])
 
 const mobileTabs = computed(() => {
   const menus = store.state.auth.menus
@@ -156,7 +159,9 @@ const mobileTabs = computed(() => {
   const ordered = MOBILE_ORDER.filter((path) => byPath.has(path)).map((path) =>
     byPath.get(path),
   )
-  const rest = leaves.filter((node) => !MOBILE_ORDER.includes(node.path))
+  const rest = leaves.filter(
+    (node) => !MOBILE_ORDER.includes(node.path) && !MOBILE_HIDDEN.has(node.path),
+  )
   return [...ordered, ...rest].slice(0, 4).map((node) => ({
     key: node.path,
     label: node.name,
@@ -172,7 +177,8 @@ const userMenu = computed(() => {
     const tabPaths = new Set(mobileTabs.value.map((item) => item.path))
     const menus = store.state.auth.menus.length ? store.state.auth.menus : FALLBACK_MENUS
     const extra = flattenMenus(menus).filter(
-      (node) => node.path && !tabPaths.has(node.path) && node.path !== '/System/Account',
+      (node) =>
+        node.path && !tabPaths.has(node.path) && !MOBILE_HIDDEN.has(node.path),
     )
     if (extra.length) {
       items.push(
