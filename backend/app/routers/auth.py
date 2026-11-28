@@ -22,6 +22,7 @@ from ..schemas.auth import (
     RegisterRequest,
     SessionOut,
     SessionRevokeRequest,
+    SiteSettings,
     UserInfo,
 )
 from ..security import rsa
@@ -32,7 +33,7 @@ from ..security.password import (
     validate_password_strength,
     verify_password,
 )
-from ..services import credential_service, invite_service, menu_service, ratelimit
+from ..services import credential_service, invite_service, menu_service, ratelimit, site_config
 from ..services.auth_service import (
     client_ip,
     create_session_token,
@@ -301,12 +302,14 @@ def logout(
 @router.post("/me")
 def me(db: Session = Depends(get_db), user: UserContext = Depends(get_current_user)):
     entity = db.get(ComUser, user.id)
+    site_config.ensure_defaults(db)
     switches = {row.switch_key: row.enabled for row in db.scalars(select(Switch)).all()}
     return ok(
         MeData(
             user_info=_user_info(db, entity, user.role_code),
             switches=switches,
             menus=menu_service.menu_tree_for_user(db, user.id, user.is_owner),
+            settings=SiteSettings(**site_config.public_settings(db)),
         )
     )
 

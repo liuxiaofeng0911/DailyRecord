@@ -7,8 +7,12 @@
       </div>
       <div class="head-actions">
         <RefreshButton :last-updated="lastUpdated" :loading="refreshing" @refresh="run(false)" />
-        <a-button @click="openBackfill">AI 补注释</a-button>
-        <a-button type="primary" @click="$router.push('/Main/Today')">记今天</a-button>
+        <a-tooltip title="按日期范围给照片和视频补生成描述与关键词，结果追加到当天正文">
+          <a-button @click="openBackfill">AI 补注释</a-button>
+        </a-tooltip>
+        <a-tooltip title="跳到今天页，继续记录今天">
+          <a-button type="primary" @click="$router.push('/Main/Today')">记今天</a-button>
+        </a-tooltip>
       </div>
     </div>
 
@@ -90,6 +94,7 @@
                   size="small"
                   type="link"
                   class="history-link"
+                  title="查看这一天保存后的字段修改留痕"
                   @click.stop="openHistory(item.entryDate)"
                 >
                   修改历史

@@ -19,12 +19,12 @@ TRASH_DAYS = 30
 PURGE_LIMIT = 500
 
 
-def soft_delete(db: Session, photo: Photo, operator: str) -> None:
+def soft_delete(db: Session, photo: Photo, operator: str, days: int | None = None) -> None:
     """移入回收站：保留 entry_id 以便恢复时回到原记录，但不再参与展示。"""
     now = now_shanghai()
     photo.deleted_at = now
     photo.deleted_by = operator
-    photo.purge_after = now + timedelta(days=TRASH_DAYS)
+    photo.purge_after = now + timedelta(days=days or TRASH_DAYS)
     photo.is_cover = False
     photo.update_user = operator
     photo.update_time = now

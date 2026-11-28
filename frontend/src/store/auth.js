@@ -19,6 +19,8 @@ export default {
     userInfo: readUser(),
     menus: [],
     menusLoaded: false,
+    // 站点业务配置（仅用于展示上传上限、回收站天数等，OWNER 可在系统设置修改）
+    settings: { uploadMaxMb: 200, trashKeepDays: 30, aiEnabled: false },
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
@@ -39,6 +41,9 @@ export default {
     setMenus(state, menus) {
       state.menus = menus || []
       state.menusLoaded = true
+    },
+    setSettings(state, settings) {
+      if (settings) state.settings = { ...state.settings, ...settings }
     },
   },
   actions: {
@@ -67,6 +72,7 @@ export default {
       const data = await authApi.me()
       commit('setUserInfo', data.userInfo)
       commit('setMenus', data.menus)
+      commit('setSettings', data.settings)
       return data
     },
     async loadMenus({ commit }) {
@@ -74,6 +80,7 @@ export default {
         const data = await authApi.me()
         commit('setUserInfo', data.userInfo)
         commit('setMenus', data.menus)
+        commit('setSettings', data.settings)
       } catch {
         commit('setMenus', [])
       }
@@ -87,11 +94,13 @@ export default {
       commit('setToken', '')
       commit('setUserInfo', null)
       commit('setMenus', [])
+      commit('setSettings', { uploadMaxMb: 200, trashKeepDays: 30, aiEnabled: false })
     },
     clear({ commit }) {
       commit('setToken', '')
       commit('setUserInfo', null)
       commit('setMenus', [])
+      commit('setSettings', { uploadMaxMb: 200, trashKeepDays: 30, aiEnabled: false })
     },
   },
 }

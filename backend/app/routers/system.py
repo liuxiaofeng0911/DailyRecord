@@ -49,7 +49,7 @@ from ..schemas.system import (
 )
 from ..security import rsa
 from ..security.password import hash_password, validate_password_strength
-from ..services import invite_service, menu_service, share_service
+from ..services import invite_service, menu_service, share_service, site_config
 from ..services.auth_service import revoke_all_sessions, role_code_of
 from ..services.bootstrap import has_users
 from ..services.timeutil import now_shanghai
@@ -722,6 +722,7 @@ def switch_get(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
+    site_config.ensure_defaults(db)
     return ok({row.switch_key: row.enabled for row in db.scalars(select(Switch)).all()})
 
 
@@ -732,9 +733,18 @@ def switch_save(
     user: UserContext = Depends(get_current_user),
 ):
     row = db.scalars(select(Switch).where(Switch.switch_key == payload.key)).first()
+    value = site_config.normalize(payload.key, payload.enabled)
     if row is None:
-        raise not_found("开关不存在")
-    row.enabled = payload.enabled
+        if payload.key not in site_config.KEY_LABELS:
+            raise not_found("开关不存在")
+        row = Switch(
+            switch_key=payload.key,
+            switch_name=site_config.KEY_LABELS.get(payload.key),
+            enabled=value,
+        )
+        db.add(row)
+    else:
+        row.enabled = value
     row.update_user = user.userid
     row.update_time = now_shanghai()
     db.commit()

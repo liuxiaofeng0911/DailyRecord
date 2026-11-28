@@ -70,20 +70,21 @@ CHUNK = 1024 * 1024
 PREVIEW_MAX_EDGE = 1280
 
 
-def max_bytes() -> int:
-    return settings.max_upload_mb * 1024 * 1024
+def max_bytes(limit_mb: int | None = None) -> int:
+    return int(limit_mb or settings.max_upload_mb) * 1024 * 1024
 
 
-async def read_upload(upload: UploadFile) -> bytes:
+async def read_upload(upload: UploadFile, limit_mb: int | None = None) -> bytes:
     buffer = io.BytesIO()
     total = 0
+    limit = int(limit_mb or settings.max_upload_mb)
     while True:
         chunk = await upload.read(CHUNK)
         if not chunk:
             break
         total += len(chunk)
-        if total > max_bytes():
-            raise ApiError(codes.BAD_REQUEST, f"文件超过 {settings.max_upload_mb}MB 限制")
+        if total > max_bytes(limit):
+            raise ApiError(codes.BAD_REQUEST, f"文件超过 {limit}MB 限制")
         buffer.write(chunk)
     return buffer.getvalue()
 

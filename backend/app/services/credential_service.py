@@ -55,8 +55,10 @@ def user_client(db: Session, user_id: int) -> ImmichClient | None:
     except credential_crypto.CredentialCryptoError:
         logger.warning("Immich 凭据解密失败: user=%s", user_id)
         return None
+    # 地址以当前运行环境配置为准：本地调试与容器内访问 Immich 的地址不同，
+    # 凭据里记录的开通时地址可能已经不可达（例如容器内是 immich-server:2283）。
     return ImmichClient(
-        base_url=credential.base_url or settings.immich_url, api_key=key
+        base_url=settings.immich_url or credential.base_url, api_key=key
     )
 
 

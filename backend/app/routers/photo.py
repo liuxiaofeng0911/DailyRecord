@@ -11,7 +11,6 @@ from ..common.exceptions import ApiError, not_found
 from ..common.page import MAX_PAGE_SIZE, page_payload
 from ..common.result import ok
 from ..common.xss import guard as xss_guard
-from ..config import settings
 from ..db import get_db
 from ..deps import UserContext, get_current_user
 from ..models import ComUser, DailyEntry, Photo
@@ -27,7 +26,15 @@ from ..schemas.photo import (
     TrashListRequest,
     UploadResult,
 )
-from ..services import ai_caption, audit, credential_service, photo_service, share_service, storage
+from ..services import (
+    ai_caption,
+    audit,
+    credential_service,
+    photo_service,
+    share_service,
+    site_config,
+    storage,
+)
 from ..services.entry_service import clear_cover
 from ..services.immich import ImmichError
 from ..services.ollama import OllamaError
@@ -82,11 +89,13 @@ async def upload(
     credential = await credential_service.ensure_credential(db, entity) if entity else None
     client = credential_service.user_client(db, user.id)
     album_id = (credential.album_id or "") if credential else ""
+    upload_limit_mb = site_config.upload_max_mb(db)
+    ai_ready = site_config.ai_enabled(db)
 
     for upload_file in uploads:
         filename = upload_file.filename or "upload"
         try:
-            content = await storage.read_upload(upload_file)
+            content = await storage.read_upload(upload_file, upload_limit_mb)
             stored = await storage.store(
                 user_id=user.id,
                 filename=filename,
@@ -106,7 +115,7 @@ async def upload(
         if entry_date is not None and explicit_taken is None:
             taken_at = datetime.combine(entry_date, taken_at.time())
         ai_state = "disabled"
-        if settings.ai_enabled and entity is not None and entity.ai_caption_enabled:
+        if ai_ready and entity is not None and entity.ai_caption_enabled:
             ai_state = "pending"
 
         photo = Photo(
@@ -341,7 +350,7 @@ def ai_backfill(
     user: UserContext = Depends(get_current_user),
 ):
     """按日期范围补注释：默认只挑缺注释的素材，显式要求时才重跑已有 AI 结果。"""
-    if not settings.ai_enabled:
+    if not site_config.ai_enabled(db):
         raise ApiError(codes.AI_DISABLED, "AI 能力未开启")
     start, end = _ai_range(payload.start, payload.end)
     rows = db.scalars(
@@ -422,7 +431,9 @@ def delete_photo(
     ).first()
     if photo is None:
         raise not_found("照片不存在")
-    photo_service.soft_delete(db, photo, user.userid)
+    photo_service.soft_delete(
+        db, photo, user.userid, days=site_config.trash_keep_days(db)
+    )
     item = photo_service.trash_item(photo, db)
     _log_photo(
         db,
@@ -562,7 +573,7 @@ async def describe_photo(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
-    if not settings.ai_enabled:
+    if not site_config.ai_enabled(db):
         raise ApiError(codes.AI_DISABLED, "AI 能力未开启")
     photo = db.scalars(
         select(Photo).where(Photo.id == int(payload.id), Photo.user_id == user.id)

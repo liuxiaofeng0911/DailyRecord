@@ -32,6 +32,60 @@
 
     <section class="surface">
       <div class="row-between section-head">
+        <strong>业务配置</strong>
+        <div class="config-actions">
+          <span class="muted">保存后立即生效，无需重启</span>
+          <a-button type="primary" :loading="configSaving" @click="saveBusinessConfig">保存</a-button>
+        </div>
+      </div>
+      <a-spin :spinning="loading">
+        <a-form layout="vertical" class="config-form">
+          <a-form-item
+            label="单个文件上传上限（MB）"
+            extra="照片与视频共用该上限；修改后今天页会同步显示最新限制。"
+          >
+            <a-input-number
+              v-model:value="business.uploadMaxMb"
+              :min="1"
+              :max="2048"
+              :precision="0"
+              style="width: 200px"
+            />
+          </a-form-item>
+          <a-form-item
+            label="回收站保留天数"
+            extra="删除的照片在回收站保留的天数，到期后由每日清理任务彻底删除。"
+          >
+            <a-input-number
+              v-model:value="business.trashKeepDays"
+              :min="1"
+              :max="365"
+              :precision="0"
+              style="width: 200px"
+            />
+          </a-form-item>
+          <a-form-item label="每日清理时间" extra="按东八区时间执行；修改后无需重启 api 服务。">
+            <a-time-picker
+              v-model:value="business.purgeTime"
+              value-format="HH:mm"
+              format="HH:mm"
+              style="width: 200px"
+            />
+          </a-form-item>
+          <a-form-item label="AI 自动注释">
+            <a-switch
+              v-model:checked="business.aiEnabled"
+              checked-children="开启"
+              un-checked-children="关闭"
+            />
+            <span class="muted config-inline">需确保 Ollama 已部署并加载视觉模型。</span>
+          </a-form-item>
+        </a-form>
+      </a-spin>
+    </section>
+
+    <section class="surface">
+      <div class="row-between section-head">
         <strong>邀请码</strong>
         <a-space>
           <a-input-number v-model:value="inviteDays" :min="1" :max="30" size="small" />
@@ -75,9 +129,6 @@
         <strong>其他开关</strong>
       </div>
       <a-descriptions :column="1" bordered size="small">
-        <a-descriptions-item label="AI 能力">
-          {{ aiEnabled ? '已开启' : '未开启' }}
-        </a-descriptions-item>
         <a-descriptions-item label="初始化状态">
           {{ bootstrapDone ? '已完成' : '未完成' }}
         </a-descriptions-item>
@@ -95,7 +146,7 @@
       <p class="muted info-text">{{ photoDetail }}</p>
       <p class="muted info-text">
         照片库是独立部署的服务。未接入时照片保存在服务器本机，记录、上传与回收站均可正常使用；
-        接入后可在今天页从照片库导入已有照片。配置方式：在服务器的 .env 中设置
+        接入后可在今天页把照片库里已有（例如手机自动备份）的照片直接加入记录。配置方式：在服务器的 .env 中设置
         IMMICH_URL 与 IMMICH_API_KEY，然后重启 api 服务。
       </p>
     </section>
@@ -115,13 +166,22 @@
 <script setup>
 import { message } from 'antdv-next'
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useStore } from 'vuex'
 
 import { immichApi, systemApi } from '@/api/api'
 
+const store = useStore()
 const loading = ref(false)
 const saving = ref(false)
+const configSaving = ref(false)
 const switches = ref({})
 const registerMode = ref('CLOSED')
+const business = reactive({
+  uploadMaxMb: 200,
+  trashKeepDays: 30,
+  purgeTime: '03:30',
+  aiEnabled: false,
+})
 const photoStatus = ref({ enabled: false, available: false, message: '' })
 const photoLoading = ref(false)
 const inviteDays = ref(7)
@@ -136,7 +196,6 @@ const inviteColumns = [
   { title: '状态', key: 'status', width: 100 },
 ]
 
-const aiEnabled = computed(() => switches.value.DAILYRECORD_AI_ENABLED === '1')
 const bootstrapDone = computed(() => switches.value.DAILYRECORD_BOOTSTRAP_DONE === 'Y')
 const photoTagText = computed(() => {
   if (!photoStatus.value.enabled) return '未接入'
@@ -161,8 +220,37 @@ async function load() {
   try {
     switches.value = (await systemApi.switchGet()) || {}
     registerMode.value = switches.value.DAILYRECORD_REGISTER_MODE || 'CLOSED'
+    business.uploadMaxMb = Number(switches.value.DAILYRECORD_UPLOAD_MAX_MB) || 200
+    business.trashKeepDays = Number(switches.value.DAILYRECORD_TRASH_KEEP_DAYS) || 30
+    business.purgeTime = switches.value.DAILYRECORD_PURGE_TIME || '03:30'
+    business.aiEnabled = switches.value.DAILYRECORD_AI_ENABLED === '1'
   } finally {
     loading.value = false
+  }
+}
+
+async function saveBusinessConfig() {
+  configSaving.value = true
+  try {
+    const payloads = [
+      ['DAILYRECORD_UPLOAD_MAX_MB', String(business.uploadMaxMb || 200)],
+      ['DAILYRECORD_TRASH_KEEP_DAYS', String(business.trashKeepDays || 30)],
+      ['DAILYRECORD_PURGE_TIME', business.purgeTime || '03:30'],
+      ['DAILYRECORD_AI_ENABLED', business.aiEnabled ? '1' : 'N'],
+    ]
+    const saved = {}
+    for (const [key, enabled] of payloads) {
+      Object.assign(saved, await systemApi.switchSave({ key, enabled }))
+    }
+    switches.value = { ...switches.value, ...saved }
+    store.commit('auth/setSettings', {
+      uploadMaxMb: Number(saved.DAILYRECORD_UPLOAD_MAX_MB) || business.uploadMaxMb,
+      trashKeepDays: Number(saved.DAILYRECORD_TRASH_KEEP_DAYS) || business.trashKeepDays,
+      aiEnabled: saved.DAILYRECORD_AI_ENABLED === '1',
+    })
+    message.success('业务配置已保存')
+  } finally {
+    configSaving.value = false
   }
 }
 
@@ -244,6 +332,7 @@ onMounted(() => {
 
 .section-head {
   margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 
 .mode-desc {
@@ -282,9 +371,42 @@ onMounted(() => {
   margin: 12px 0 0;
 }
 
+.config-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.config-form {
+  max-width: 620px;
+}
+
+.config-inline {
+  margin-left: var(--space-3);
+  font-size: 12px;
+}
+
 .photo-head {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+@media (max-width: 768px) {
+  .config-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .config-form :deep(.ant-input-number),
+  .config-form :deep(.ant-picker) {
+    width: 100% !important;
+  }
+
+  .config-inline {
+    display: block;
+    margin: 6px 0 0;
+  }
 }
 </style>

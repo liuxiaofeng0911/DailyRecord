@@ -1,5 +1,5 @@
 <template>
-  <div class="photo-grid">
+  <div class="photo-grid" :class="{ compact }">
     <div
       v-for="(photo, index) in photos"
       :key="photo.id"
@@ -7,6 +7,8 @@
       :class="{ cover: photo.isCover }"
       role="button"
       tabindex="0"
+      :title="photo.mediaType === 'VIDEO' ? '点击播放视频' : '点击查看大图'"
+      :aria-label="photo.mediaType === 'VIDEO' ? '播放视频' : '查看大图'"
       @click="openViewer(index)"
       @keydown.enter.self="openViewer(index)"
     >
@@ -51,6 +53,7 @@ import PhotoViewer from '@/components/PhotoViewer.vue'
 defineProps({
   photos: { type: Array, default: () => [] },
   editable: { type: Boolean, default: false },
+  compact: { type: Boolean, default: false },
 })
 defineEmits(['cover', 'remove'])
 
@@ -198,6 +201,22 @@ function openViewer(index) {
   .photo-grid {
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: 10px;
+  }
+}
+
+/* 共享记录等只读场景使用更紧凑的方格 */
+.photo-grid.compact {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.photo-grid.compact .photo-item {
+  aspect-ratio: 1;
+}
+
+@media (max-width: 768px) {
+  .photo-grid.compact {
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
   }
 }
 

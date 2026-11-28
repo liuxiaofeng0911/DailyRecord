@@ -12,10 +12,16 @@
         <span v-if="streak > 0" class="chip">连续记录 {{ streak }} 天</span>
       </div>
       <div class="header-actions">
-        <a-button @click="historyOpen = true">修改记录</a-button>
+        <a-tooltip title="查看这一天保存后产生的字段修改记录">
+          <a-button @click="historyOpen = true">修改记录</a-button>
+        </a-tooltip>
         <RefreshButton :last-updated="lastUpdated" :loading="loading" @refresh="manualRefresh" />
-        <a-button :disabled="!entry" @click="removeEntry">删除当天</a-button>
-        <a-button type="primary" :loading="saving" @click="save">保存</a-button>
+        <a-tooltip title="删除这一天的文字、心情、标签与封面，照片会保留">
+          <a-button :disabled="!entry" @click="removeEntry">删除当天</a-button>
+        </a-tooltip>
+        <a-tooltip title="保存记录（快捷键 Ctrl/Cmd + S）">
+          <a-button type="primary" :loading="saving" @click="save">保存</a-button>
+        </a-tooltip>
       </div>
     </header>
 
@@ -103,15 +109,28 @@
                   <span>AI 注释</span>
                 </label>
               </a-tooltip>
-              <a-button :loading="uploading" :disabled="uploading" @click="triggerUpload">上传</a-button>
-              <a-button v-if="mobile" :disabled="uploading" @click="triggerCamera">拍照</a-button>
-              <a-button @click="openImmich">从照片库导入</a-button>
-              <a-button @click="trashOpen = true">
-                回收站<span v-if="trashCount" class="trash-count">{{ trashCount }}</span>
-              </a-button>
+              <a-tooltip title="上传照片或视频，可多选，也支持直接粘贴截图">
+                <a-button :loading="uploading" :disabled="uploading" @click="triggerUpload">
+                  上传
+                </a-button>
+              </a-tooltip>
+              <a-tooltip v-if="mobile" title="调用摄像头直接拍摄">
+                <a-button :disabled="uploading" @click="triggerCamera">拍照</a-button>
+              </a-tooltip>
+              <a-tooltip :title="immichHint">
+                <a-button @click="openImmich">从照片库导入</a-button>
+              </a-tooltip>
+              <a-tooltip :title="`回收站保留 ${trashKeepDays} 天，期间可恢复或彻底删除`">
+                <a-button @click="trashOpen = true">
+                  回收站<span v-if="trashCount" class="trash-count">{{ trashCount }}</span>
+                </a-button>
+              </a-tooltip>
             </div>
           </div>
-          <p class="muted paste-hint">支持 JPG/PNG/WebP/GIF/HEIC/AVIF 与常见视频；可直接 Ctrl/Cmd+V 粘贴截图</p>
+          <p class="muted paste-hint">
+            支持 JPG/PNG/WebP/GIF/HEIC/AVIF 与常见视频；照片/视频单个文件不超过
+            {{ uploadMaxMb }}MB；可直接 Ctrl/Cmd+V 粘贴截图
+          </p>
           <div v-if="uploading" class="upload-progress">
             <a-progress :percent="uploadPercent" size="small" />
           </div>
@@ -149,10 +168,14 @@
     <a-modal
       v-model:open="immichOpen"
       title="从照片库选择照片"
-      width="760px"
+      :width="mobile ? '92%' : '760px'"
       :footer="null"
     >
       <a-spin :spinning="immichLoading">
+        <p class="muted immich-tip">
+          照片库（Immich）里通常已经有手机自动备份的照片。这里可以直接挑当天已有的照片加入记录，
+          不用再上传一次；如果照片还没进照片库，请用「上传」。
+        </p>
         <a-alert
           v-if="immichMessage"
           :message="immichMessage"
@@ -253,10 +276,15 @@ const selectedAssets = ref([])
 
 const dateValue = computed(() => dayjs(date.value))
 const mobile = computed(() => store.state.app.mobile)
+const uploadMaxMb = computed(() => store.state.auth.settings?.uploadMaxMb || 200)
+const trashKeepDays = computed(() => store.state.auth.settings?.trashKeepDays || 30)
 const aiCaption = computed(() => store.state.auth.userInfo?.aiCaptionEnabled !== false)
 const aiCaptionHint = computed(() =>
-  aiCaption.value ? '上传后自动生成配文与关键词，并追加到当天记录' : '已关闭，上传后不会自动注释',
+  aiCaption.value
+    ? '开启后，上传的照片和视频会自动生成一句描述与关键词，并追加到当天正文；由本地 AI 模型处理，可能较慢'
+    : '已关闭：上传后不会自动生成描述，可稍后在时间线里补注释',
 )
+const immichHint = '把照片库（Immich）里当天已有的照片直接加入记录，适合手机已自动备份的照片；普通上传请用左侧「上传」'
 const aiSaving = ref(false)
 
 async function toggleAiCaption(value) {
@@ -862,6 +890,13 @@ onBeforeUnmount(() => {
 .paste-hint {
   margin: 10px 0 0;
   font-size: 12px;
+  line-height: 1.7;
+}
+
+.immich-tip {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .photo-actions {
@@ -1003,7 +1038,7 @@ onBeforeUnmount(() => {
   }
 
   .paste-hint {
-    display: none;
+    font-size: 11px;
   }
 }
 </style>

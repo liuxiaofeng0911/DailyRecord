@@ -114,12 +114,11 @@
               <div v-if="item.tags?.length" class="share-tags">
                 <a-tag v-for="tag in item.tags" :key="tag.id">#{{ tag.name }}</a-tag>
               </div>
-              <div v-if="item.photos?.length" class="share-photos">
-                <div v-for="photo in item.photos" :key="photo.id" class="share-photo">
-                  <img :src="thumbUrl(photo)" :alt="photo.caption || '照片'" loading="lazy" />
-                  <span v-if="photo.mediaType === 'VIDEO'" class="video-badge">视频</span>
-                </div>
-              </div>
+              <PhotoGrid
+                v-if="item.photos?.length"
+                compact
+                :photos="item.photos"
+              />
             </article>
           </div>
           <a-empty v-else description="暂时没有可查看的共享记录" />
@@ -146,7 +145,8 @@ import { message } from 'antdv-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
 
-import { orgShareApi, photoApi } from '@/api/api'
+import { orgShareApi } from '@/api/api'
+import PhotoGrid from '@/components/PhotoGrid.vue'
 
 const store = useStore()
 const isOwner = computed(() => store.getters['auth/isOwner'])
@@ -182,10 +182,6 @@ const memberOptions = computed(() =>
     .filter((row) => row.id !== myId.value)
     .map((row) => ({ value: row.id, label: `${row.username}（${row.userid}）` })),
 )
-
-function thumbUrl(photo) {
-  return `${photoApi.thumbnail(photo.id)}?v=${photo.version || 0}`
-}
 
 function buildEntriesPayload() {
   const payload = {
@@ -380,39 +376,6 @@ onMounted(async () => {
   margin-bottom: var(--space-2);
 }
 
-.share-photos {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 8px;
-}
-
-.share-photo {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--app-bg-body);
-  border: 1px solid var(--app-border);
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-}
-
-.video-badge {
-  position: absolute;
-  left: 6px;
-  bottom: 6px;
-  padding: 1px 6px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-size: 10px;
-}
-
 .share-pager {
   display: flex;
   justify-content: center;
@@ -441,10 +404,6 @@ onMounted(async () => {
 
   .filter-row {
     width: 100%;
-  }
-
-  .share-photos {
-    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
   }
 }
 </style>

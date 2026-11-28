@@ -3,6 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models import ComUser, GeneralCode, Org, Resource, Role, RoleResource, Switch, UserOrg
 
 DICT_SEEDS: dict[str, list[tuple[str, str]]] = {
@@ -39,7 +40,14 @@ DICT_SEEDS: dict[str, list[tuple[str, str]]] = {
 
 SWITCH_SEEDS: dict[str, tuple[str, str]] = {
     "DAILYRECORD_REGISTER_MODE": ("注册模式", "CLOSED"),
-    "DAILYRECORD_AI_ENABLED": ("AI 总开关", "N"),
+    # 以下四项为所有者可在前端修改的业务配置，.env 只作为首次初始化默认值
+    "DAILYRECORD_AI_ENABLED": ("AI 总开关", "1" if settings.ai_enabled else "N"),
+    "DAILYRECORD_UPLOAD_MAX_MB": ("上传大小上限(MB)", str(settings.max_upload_mb)),
+    "DAILYRECORD_TRASH_KEEP_DAYS": ("回收站保留天数", "30"),
+    "DAILYRECORD_PURGE_TIME": (
+        "回收站清理时间",
+        f"{settings.photo_purge_hour:02d}:{settings.photo_purge_minute:02d}",
+    ),
     "DAILYRECORD_BOOTSTRAP_DONE": ("初始化完成", "N"),
 }
 
