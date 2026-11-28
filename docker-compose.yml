@@ -182,9 +182,10 @@ services:
     environment:
       APP_VERSION: ${APP_VERSION:-latest}
       TZ: ${TZ:-Asia/Shanghai}
+      WEB_PORT: "${WEB_PORT:-8080}"
       API_UPSTREAM: api:${API_PORT:-8000}
     ports:
-      - "${WEB_PORT:-8080}:8080"
+      - "${WEB_PORT:-8080}:${WEB_PORT:-8080}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

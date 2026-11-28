@@ -21,6 +21,7 @@ ARG APP_VERSION=dev
 
 ENV TZ=Asia/Shanghai \
     APP_VERSION=${APP_VERSION} \
+    WEB_PORT=8080 \
     API_UPSTREAM=api:8000 \
     IMMICH_UPSTREAM=immich-server:2283
 
@@ -36,4 +37,4 @@ COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
+    CMD wget -qO- "http://127.0.0.1:${WEB_PORT:-8080}/healthz" || exit 1

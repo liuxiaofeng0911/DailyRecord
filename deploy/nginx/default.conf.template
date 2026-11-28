@@ -3,7 +3,7 @@ limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
 proxy_cache_path /var/cache/nginx/photo levels=1:2 keys_zone=photo_cache:10m max_size=2g inactive=30d use_temp_path=off;
 
 server {
-    listen 8080;
+    listen ${WEB_PORT};
     server_name _;
 
     root /usr/share/nginx/html;
