@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
-from datetime import timedelta
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -17,30 +16,27 @@ from .config import settings
 from .db import SessionLocal, create_all, get_db
 from .services.bootstrap import ensure_seed_data
 from .services.photo_service import run_purge_job
+from .services.site_config import purge_hour_minute
 from .services.timeutil import now_shanghai
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger("dailyrecord")
 
 
-def _seconds_until_purge() -> float:
-    now = now_shanghai()
-    target = now.replace(
-        hour=settings.photo_purge_hour, minute=settings.photo_purge_minute, second=0, microsecond=0
-    )
-    if target <= now:
-        target += timedelta(days=1)
-    return (target - now).total_seconds()
-
-
 async def _purge_loop() -> None:
-    """每天 03:30（东八区）清理到期回收站照片。"""
+    """每分钟检查一次清理时间；所有者改配置后无需重启即可生效。"""
     while True:
-        await asyncio.sleep(max(60.0, _seconds_until_purge()))
+        await asyncio.sleep(60)
         try:
             with SessionLocal() as db:
+                hour, minute = purge_hour_minute(db)
+                now = now_shanghai()
+                target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if now < target:
+                    continue
                 result = await run_purge_job(db)
-                logger.info("回收站清理完成: %s", result)
+                if not result.get("skipped"):
+                    logger.info("回收站清理完成: %s", result)
         except Exception:  # pragma: no cover - 后台任务防御
             logger.exception("回收站清理任务失败")
 

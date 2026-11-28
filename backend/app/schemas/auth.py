@@ -54,10 +54,17 @@ class SessionOut(CamelModel):
     current: bool = False
 
 
+class SiteSettings(CamelModel):
+    upload_max_mb: int = 200
+    trash_keep_days: int = 30
+    ai_enabled: bool = False
+
+
 class MeData(CamelModel):
     user_info: UserInfo
     switches: dict[str, str] = Field(default_factory=dict)
     menus: list[dict] = Field(default_factory=list)
+    settings: SiteSettings = Field(default_factory=SiteSettings)
 
 
 class AiCaptionRequest(CamelModel):

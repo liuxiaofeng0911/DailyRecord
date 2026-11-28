@@ -16,7 +16,7 @@ from ..deps import UserContext, get_current_user
 from ..models import ComUser, DailyEntry, Photo
 from ..schemas.entry import PhotoOut
 from ..schemas.photo import ImmichImportRequest, ImmichStatusOut
-from ..services import ai_caption, credential_service
+from ..services import ai_caption, credential_service, site_config
 from ..services.immich import ImmichError
 from ..services.timeutil import now_shanghai
 
@@ -222,7 +222,7 @@ async def import_assets(
 
     created: list[Photo] = []
     entity = db.get(ComUser, user.id)
-    ai_pending = settings.ai_enabled and entity is not None and entity.ai_caption_enabled
+    ai_pending = site_config.ai_enabled(db) and entity is not None and entity.ai_caption_enabled
     for item in items:
         if not item["id"] or item["id"] in existing:
             continue

@@ -37,6 +37,16 @@
           <strong class="header-title">{{ pageTitle }}</strong>
         </div>
         <div class="header-right">
+          <a-tooltip title="功能清单与使用说明">
+            <button
+              type="button"
+              class="icon-button help-entry"
+              aria-label="功能清单"
+              @click="helpOpen = true"
+            >
+              <AppIcon name="lucide:circle-help" :size="18" />
+            </button>
+          </a-tooltip>
           <ThemeSelect />
           <a-dropdown :menu="userMenu" trigger="click">
             <button type="button" class="user-button" :aria-label="`${username} 的菜单`">
@@ -59,6 +69,22 @@
       </a-layout-content>
     </a-layout>
 
+    <a-modal
+      v-model:open="helpOpen"
+      title="功能清单"
+      :footer="null"
+      :width="mobile ? '92%' : 640"
+    >
+      <div class="help-list">
+        <section v-for="group in helpSections" :key="group.title" class="help-group">
+          <h4>{{ group.title }}</h4>
+          <ul>
+            <li v-for="line in group.items" :key="line">{{ line }}</li>
+          </ul>
+        </section>
+      </div>
+    </a-modal>
+
     <nav v-if="mobile" class="mobile-tabs">
       <button
         v-for="item in mobileTabs"
@@ -75,7 +101,7 @@
 </template>
 
 <script setup>
-import { computed, h, onBeforeUnmount, onMounted } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
@@ -86,6 +112,52 @@ import { resolveNavIcon } from '@/store/icon'
 const store = useStore()
 const router = useRouter()
 const route = useRoute()
+const helpOpen = ref(false)
+
+const helpSections = [
+  {
+    title: '今天',
+    items: [
+      '写正文、选心情、加标签，保存后成为这一天的一条记录。',
+      '「上传」支持照片和视频，可多选，也能直接粘贴截图；「拍照」仅手机端显示。',
+      '「AI 注释」开启后，新上传的照片/视频会自动生成描述和关键词，并追加到当天正文；关闭后可用时间线的「AI 补注释」补做。',
+      '「从照片库导入」用于把 Immich 里已有（如手机自动备份）的当天照片直接加入记录，无需重复上传。',
+      '「回收站」保存已删除的照片，可在保留期内恢复或彻底删除。',
+    ],
+  },
+  {
+    title: '时间线',
+    items: [
+      '按月回看每天的记录，点击整行进入当天编辑。',
+      '支持关键词、情绪、标签和日期范围筛选，预设按钮可快速切到本月/今年/近 30 天。',
+      '「AI 补注释」按日期范围给缺注释的素材补生成描述。',
+      '「修改历史」查看这条记录保存后的字段级修改留痕。',
+    ],
+  },
+  {
+    title: '统计',
+    items: [
+      '查看记录天数、照片数量、连续记录天数与年度热力图。',
+      '月度签到率、情绪分布、常用标签辅助回顾，点击方块或柱子可跳到对应日期。',
+    ],
+  },
+  {
+    title: '共享',
+    items: [
+      '组织内需要「我允许对方看」和「我想看对方」同时勾选，才会看到彼此的记录。',
+      '组织共享开关可被所有者随时暂停，暂停期间配置会保留。',
+      '所有者可以直接查看所选组织内全部成员的记录，照片可点开大图。',
+    ],
+  },
+  {
+    title: '账户与系统',
+    items: [
+      '账户设置：修改密码、查看/撤销登录设备、调整标签图标、导出 JSON/Markdown。',
+      '系统设置（仅所有者）：注册模式、邀请码、上传大小上限、回收站保留天数与清理时间、AI 总开关。',
+      '用户/角色/组织/菜单/字典管理仅所有者可见。',
+    ],
+  },
+]
 
 const collapsed = computed({
   get: () => store.state.app.collapsed,
@@ -309,6 +381,21 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.help-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  transition: background 0.2s;
+
+  &:hover {
+    background: var(--app-bg-elevated);
+  }
+}
+
 .user-button {
   display: inline-flex;
   align-items: center;
@@ -366,6 +453,30 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
   .app-content {
     min-height: calc(100dvh - 56px);
+  }
+}
+
+.help-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 62vh;
+  overflow: auto;
+}
+
+.help-group {
+  h4 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    color: var(--app-text-1);
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--app-text-2);
+    font-size: 13px;
+    line-height: 1.8;
   }
 }
 

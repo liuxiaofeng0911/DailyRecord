@@ -7,7 +7,7 @@
     @update:open="visible = $event"
   >
     <div class="trash-head">
-      <span class="muted">删除后保留 30 天，到期自动清理；期间可恢复。</span>
+      <span class="muted">删除后保留 {{ keepDays }} 天，到期自动清理；期间可恢复。</span>
       <a-button size="small" type="link" :loading="loading" @click="load">刷新</a-button>
     </div>
 
@@ -74,8 +74,12 @@
 <script setup>
 import { Modal, message } from 'antdv-next'
 import { computed, ref, watch } from 'vue'
+import { useStore } from 'vuex'
 
 import { photoApi } from '@/api/api'
+
+const store = useStore()
+const keepDays = computed(() => store.state.auth.settings?.trashKeepDays || 30)
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -174,6 +178,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  flex-wrap: wrap;
   font-size: 12px;
   margin-bottom: var(--space-3);
 }

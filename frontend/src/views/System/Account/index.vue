@@ -5,7 +5,9 @@
         <h2 class="page-title">账户设置</h2>
         <p class="page-subtitle">管理账号、照片库与数据导出。</p>
       </div>
-      <a-button @click="pwdOpen = true">修改密码</a-button>
+      <a-tooltip title="修改当前账号的登录密码">
+        <a-button @click="pwdOpen = true">修改密码</a-button>
+      </a-tooltip>
     </div>
 
     <section class="surface">
@@ -27,14 +29,16 @@
         <strong>照片库</strong>
         <div class="photo-head">
           <a-tag :color="photoTagColor">{{ photoTagText }}</a-tag>
-          <a-button
-            v-if="photoCanRetry"
-            size="small"
-            :loading="photoRetrying"
-            @click="retryPhoto"
-          >
-            重试开通
-          </a-button>
+          <a-tooltip title="重新尝试为当前账号开通照片库">
+            <a-button
+              v-if="photoCanRetry"
+              size="small"
+              :loading="photoRetrying"
+              @click="retryPhoto"
+            >
+              重试开通
+            </a-button>
+          </a-tooltip>
         </div>
       </div>
       <p class="muted info-text">{{ photoDetail }}</p>
@@ -46,7 +50,9 @@
     <section class="surface">
       <div class="row-between section-head">
         <strong>登录设备</strong>
-        <a-button size="small" danger @click="revokeAll">退出全部设备</a-button>
+        <a-tooltip title="撤销所有设备的登录状态，当前设备也会退出">
+          <a-button size="small" danger @click="revokeAll">退出全部设备</a-button>
+        </a-tooltip>
       </div>
       <a-spin :spinning="sessionLoading">
         <a-table
@@ -112,9 +118,13 @@
     <section class="surface">
       <div class="row-between section-head">
         <strong>照片回收站</strong>
-        <a-button size="small" @click="trashOpen = true">打开回收站</a-button>
+        <a-tooltip :title="`查看已删除的照片，保留 ${trashKeepDays} 天`">
+          <a-button size="small" @click="trashOpen = true">打开回收站</a-button>
+        </a-tooltip>
       </div>
-      <p class="muted trash-hint">删除的照片保留 30 天，期间可恢复；到期自动清理。</p>
+      <p class="muted trash-hint">
+        删除的照片保留 {{ trashKeepDays }} 天，期间可恢复；到期自动清理。
+      </p>
     </section>
 
     <section class="surface">
@@ -192,6 +202,7 @@ const photoDetail = computed(() => {
 
 const user = computed(() => store.state.auth.userInfo || {})
 const roleLabel = computed(() => (user.value.roleCode === 'OWNER' ? '所有者' : '成员'))
+const trashKeepDays = computed(() => store.state.auth.settings?.trashKeepDays || 30)
 
 const sessionColumns = [
   { title: '设备', key: 'device', width: 300, ellipsis: true },

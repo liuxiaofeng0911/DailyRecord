@@ -258,9 +258,9 @@ async def _consume(queue: asyncio.Queue[int]) -> None:
 
 
 def enqueue(photo_ids: list[int]) -> None:
-    """把待注释素材加入后台队列；需在事件循环内调用（AI 未开启时直接跳过）。"""
+    """把待注释素材加入后台队列；是否启用 AI 由调用方按业务配置判断。"""
     global _queue, _worker
-    if not settings.ai_enabled or not photo_ids:
+    if not photo_ids:
         return
     if _queue is None:
         _queue = asyncio.Queue()
