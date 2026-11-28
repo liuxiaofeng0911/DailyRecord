@@ -52,10 +52,11 @@ class Settings(BaseSettings):
     ai_enabled: bool = False
     ollama_url: str = "http://ollama:11434"
     ollama_vlm_model: str = "qwen3-vl:2b"
+    # 预留：仅 services/ollama.py#summarize_period（月度摘要未接入）使用
     ollama_text_model: str = "qwen2.5:7b"
 
     max_upload_mb: int = 200
-    cors_origins: str = "http://localhost:5173,http://localhost:8080,http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://localhost:8080"
 
     photo_purge_enabled: bool = True
     photo_purge_hour: int = 3

@@ -26,21 +26,23 @@
 1. 安装 Docker 与 Docker Compose
 2. 准备配置：`cp .env.example .env`，至少填写 `POSTGRES_PASSWORD`、`IMMICH_DB_PASSWORD`、`JWT_SECRET`，并用 `python scripts/gen_keys.py` 生成 RSA 密钥
 3. 一键构建启动：`sh scripts/build.sh`
-4. 浏览器访问 `http://localhost:8080`
+4. 浏览器访问 `http://localhost:8080`（对外端口取 `.env` 的 `WEB_PORT`，默认 8080）
 
 本地开发与调试（可与 docker 部署同时运行，端口不冲突）：
 
-| 端 | 端口 | 说明 |
+| 端 | 默认端口 | 说明 |
 | --- | --- | --- |
-| docker web | `8080` | 容器内 Nginx + 打包产物 |
-| docker api | `8000` | 仅在容器网络内暴露，未映射到宿主，本机 `8000` 空闲 |
-| 本地后端 | `8000` | `uvicorn --reload`，前端 `/api` 代理到这里 |
-| 本地前端 | `5173` | Vite dev server；可用 `VITE_DEV_PORT` 覆盖 |
+| docker web | `WEB_PORT`（8080） | 容器内 Nginx + 打包产物 |
+| docker api | `API_PORT`（8000） | 仅容器网络内使用，默认不映射到宿主 |
+| 本地后端 | `API_PORT`（8000） | `uvicorn --reload`，前端 `/api` 代理到这里 |
+| 本地前端 | `VITE_DEV_PORT`（5173） | Vite dev server |
+
+以上端口都可在根目录 `.env` 覆盖，仓库与文档不写死具体部署端口。
 
 后端（IDEA 一键 Debug）：
 
 1. 安装依赖：`cd backend && pip install -r requirements.txt`
-2. 新建 Python 运行配置：module name 填 `uvicorn`，parameters 填 `app.main:app --reload --port 8000`，working directory 指向 `backend`
+2. 新建 Python 运行配置：module name 填 `uvicorn`，parameters 填 `app.main:app --reload --port 8000`（与 `.env` 的 `API_PORT` 保持一致），working directory 指向 `backend`
 3. 直接 Debug 启动。后端会读取**仓库根目录的 `.env`**（`config.py` 里的 `ROOT_ENV`），因此本地调试与 docker 共用同一份配置、同一个数据库，改动即时可见
 4. 若删掉了根 `.env`，则退回默认值：SQLite `backend/data/diary.db`（首次启动自动建表并写入种子数据），RSA 未配置会自动生成临时密钥
 
@@ -49,10 +51,10 @@
 ```bash
 cd frontend
 npm install
-npm run dev    # http://localhost:5173
+npm run dev    # http://localhost:5173（端口由 .env 的 VITE_DEV_PORT 决定）
 ```
 
-说明：`.env` 中的地址按**本地宿主视角**填写，docker 的 `postgres` / `redis` 固定映射到 `127.0.0.1:5432` / `127.0.0.1:6379`，Immich 为 `localhost:2283`，Ollama 为 `127.0.0.1:11434`；容器内由 `docker-compose.yml` 的 `environment` 覆盖成 `postgres:5432`、`redis:6379`、`immich-server:2283`、`host.docker.internal:11434`。所以本地 Debug 与 docker 版本读写的是同一套数据，无需额外改配置。
+说明：`.env` 中的地址按**本地宿主视角**填写，数据库端口对应 `PG_HOST_PORT`，Immich / Ollama 默认 `2283` / `11434`；容器内由 `docker-compose.yml` 的 `environment` 覆盖成 `postgres:5432`、`redis:6379`、`immich-server:2283`、`host.docker.internal:11434`。所以本地 Debug 与 docker 版本读写的是同一套数据，无需额外改配置。
 
 ## 数据库与表结构
 
@@ -77,7 +79,7 @@ DailyRecord/
 
 | 命令 | 说明 |
 | --- | --- |
-| `sh scripts/build.sh` | 构建并启动（前端 8080 / 后端 8000） |
+| `sh scripts/build.sh` | 构建并启动（端口由 `.env` 决定） |
 | `sh scripts/update.sh` | 拉取代码、重建并滚动更新 |
 | `sh scripts/backup.sh` / `restore.sh` | 备份与恢复数据 |
 | `sh scripts/version.sh` | 查看或设置版本号 |

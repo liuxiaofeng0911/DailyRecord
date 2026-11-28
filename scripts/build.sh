@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# 一键构建并启动：前端 8080，后端 8000
+# 一键构建并启动（端口由 .env 的 WEB_PORT / API_PORT 决定）
 # 用法：
 #   sh scripts/build.sh                 构建并启动；版本号自动取下一个补丁版本 X.X.(X+1)
 #   sh scripts/build.sh 1.2.3           指定版本号构建
@@ -131,7 +131,7 @@ WEB_PORT_VALUE=$(grep -E '^WEB_PORT=' .env 2>/dev/null | tail -n 1 | cut -d= -f2
 WEB_PORT_VALUE=${WEB_PORT_VALUE:-8080}
 echo ""
 echo "前端入口：http://localhost:${WEB_PORT_VALUE}"
-echo "后端接口：仅容器内网 api:8000（调试可临时映射）"
+echo "后端接口：仅容器内网（调试可临时映射）"
 
 if [ "$CHECK" = "1" ]; then
     echo "==> 等待前端健康检查"
