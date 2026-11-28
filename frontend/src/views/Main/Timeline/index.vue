@@ -7,6 +7,7 @@
       </div>
       <div class="head-actions">
         <RefreshButton :last-updated="lastUpdated" :loading="refreshing" @refresh="run(false)" />
+        <a-button @click="openBackfill">AI 补注释</a-button>
         <a-button type="primary" @click="$router.push('/Main/Today')">记今天</a-button>
       </div>
     </div>
@@ -112,14 +113,53 @@
     </div>
 
     <HistoryDrawer v-model:open="historyOpen" :date="historyDate" />
+
+    <a-modal
+      v-model:open="aiOpen"
+      title="AI 补注释"
+      :width="mobile ? '92%' : 460"
+      :footer="null"
+      @cancel="stopAiPolling"
+    >
+      <p class="muted ai-tip">
+        按日期范围给照片和视频补生成配文与关键词，结果会追加到当天记录正文末尾。
+      </p>
+      <div class="ai-form">
+        <a-range-picker
+          v-model:value="aiRange"
+          format="YYYY-MM-DD"
+          :allow-clear="false"
+          :style="{ width: '100%' }"
+        />
+        <a-checkbox v-model:checked="aiRegenerate">重新生成已有 AI 结果</a-checkbox>
+        <a-button
+          type="primary"
+          block
+          :loading="aiRunning"
+          :disabled="!aiRange?.length"
+          @click="startBackfill"
+        >
+          {{ aiRunning ? '处理中…' : '开始补注释' }}
+        </a-button>
+      </div>
+      <div v-if="aiStatus.total" class="ai-progress">
+        <a-progress :percent="aiPercent" size="small" :status="aiProgressStatus" />
+        <p class="muted">
+          共 {{ aiStatus.total }} 项 · 已完成 {{ aiStatus.done }} · 失败 {{ aiStatus.failed }} ·
+          待处理 {{ aiStatus.pending }}
+        </p>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import dayjs from 'dayjs'
-import { computed, onActivated, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
+
+import { message } from 'antdv-next'
 
 import { entryApi, photoApi } from '@/api/api'
 import AppIcon from '@/components/AppIcon.vue'
@@ -150,6 +190,79 @@ const filters = reactive({
   range: route.query.month ? monthRange(route.query.month) : null,
 })
 const monthFilter = ref(route.query.month || '')
+
+/* AI 补注释 */
+const mobile = computed(() => store.state.app.mobile)
+const aiOpen = ref(false)
+const aiRange = ref([dayjs().subtract(6, 'day'), dayjs()])
+const aiRegenerate = ref(false)
+const aiRunning = ref(false)
+const aiStatus = ref({ total: 0, pending: 0, done: 0, failed: 0 })
+let aiTimer = null
+
+const aiPercent = computed(() => {
+  const { total, pending } = aiStatus.value
+  if (!total) return 0
+  return Math.min(100, Math.round(((total - pending) / total) * 100))
+})
+const aiProgressStatus = computed(() => {
+  if (aiStatus.value.pending) return 'active'
+  return aiStatus.value.failed ? 'exception' : 'success'
+})
+
+function aiParams() {
+  return {
+    start: aiRange.value[0].format('YYYY-MM-DD'),
+    end: aiRange.value[1].format('YYYY-MM-DD'),
+  }
+}
+
+async function refreshAiStatus() {
+  if (!aiRange.value?.length) return
+  aiStatus.value = await photoApi.aiStatus(aiParams())
+}
+
+function stopAiPolling() {
+  if (aiTimer) {
+    clearInterval(aiTimer)
+    aiTimer = null
+  }
+}
+
+async function openBackfill() {
+  aiOpen.value = true
+  await refreshAiStatus()
+}
+
+async function startBackfill() {
+  if (!aiRange.value?.length) return
+  aiRunning.value = true
+  try {
+    const result = await photoApi.aiBackfill({ ...aiParams(), regenerate: aiRegenerate.value })
+    if (!result.queued) {
+      message.info('这个范围内没有需要补注释的素材')
+    } else {
+      message.success(`已加入队列 ${result.queued} 项${result.skipped ? `，跳过 ${result.skipped} 项` : ''}`)
+    }
+    await refreshAiStatus()
+    stopAiPolling()
+    aiTimer = setInterval(async () => {
+      try {
+        await refreshAiStatus()
+      } catch {
+        // 轮询失败继续等待
+      }
+      if (!aiStatus.value.pending) {
+        stopAiPolling()
+        aiRunning.value = false
+        await load({ silent: true })
+        message.success('AI 补注释完成')
+      }
+    }, 4000)
+  } catch {
+    aiRunning.value = false
+  }
+}
 
 function monthRange(value) {
   const start = dayjs(`${value}-01`)
@@ -306,6 +419,8 @@ onMounted(() => run(false))
 onActivated(() => {
   if (renderedVersion.value !== store.state.app.dataVersion.entries) run(true)
 })
+
+onBeforeUnmount(stopAiPolling)
 </script>
 
 <style scoped lang="less">
@@ -325,6 +440,29 @@ onActivated(() => {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ai-tip {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-progress {
+  margin-top: 18px;
+
+  p {
+    margin: 8px 0 0;
+    font-size: 12px;
+  }
 }
 
 .filter-row {

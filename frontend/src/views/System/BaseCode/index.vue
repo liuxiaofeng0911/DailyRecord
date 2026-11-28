@@ -27,7 +27,7 @@
         :loading="loading"
         row-key="id"
         size="middle"
-        :scroll="{ x: 560 }"
+        :scroll="{ x: 770 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'action'">
@@ -78,8 +78,8 @@ const editor = reactive({ id: null, codeid: '', code: '', name: '', remark: '' }
 const columns = [
   { title: '字典类型', dataIndex: 'codeid', key: 'codeid', width: 140 },
   { title: '码值', dataIndex: 'code', key: 'code', width: 140 },
-  { title: '显示名', dataIndex: 'name', key: 'name' },
-  { title: '备注', dataIndex: 'remark', key: 'remark', ellipsis: true },
+  { title: '显示名', dataIndex: 'name', key: 'name', width: 160 },
+  { title: '备注', dataIndex: 'remark', key: 'remark', width: 240, ellipsis: true },
   { title: '操作', key: 'action', width: 90 },
 ]
 

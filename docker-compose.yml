@@ -11,6 +11,9 @@ services:
       PGTZ: ${APP_TIMEZONE:-Asia/Shanghai}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # 仅本机可连；宿主 5432 常被本机 PostgreSQL 占用，这里改用 5432
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-diary} -d ${POSTGRES_DB:-diary}"]
       interval: 10s
@@ -32,6 +35,9 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - redisdata:/data
+    # 仅本机可连：本地调试直接用 .env 里的 REDIS_URL（127.0.0.1:6379）
+    ports:
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
@@ -139,6 +145,9 @@ services:
       APP_VERSION: ${APP_VERSION:-latest}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-diary}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-diary}
       REDIS_URL: redis://redis:6379/0
+      # .env 里是宿主视角的地址，容器内必须用服务名 / host.docker.internal
+      IMMICH_URL: http://immich-server:2283
+      OLLAMA_URL: http://host.docker.internal:11434
       TZ: ${TZ:-Asia/Shanghai}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Shanghai}
       API_PORT: "8000"

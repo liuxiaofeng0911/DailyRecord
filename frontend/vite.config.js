@@ -22,7 +22,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    // 本地调试固定 5173：8080 由 docker 的 web 容器占用，/api 代理到本机 8000 的后端
+    port: Number(process.env.VITE_DEV_PORT || 5173),
+    strictPort: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

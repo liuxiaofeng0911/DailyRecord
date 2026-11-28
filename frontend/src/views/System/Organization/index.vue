@@ -19,7 +19,7 @@
         row-key="id"
         size="middle"
         :default-expand-all-rows="true"
-        :scroll="{ x: 1080 }"
+        :scroll="{ x: 1290 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'status'">
@@ -148,7 +148,7 @@ const columns = [
   { title: '组织编码', dataIndex: 'orgCode', key: 'orgCode', width: 150 },
   { title: '状态', key: 'status', width: 90 },
   { title: '共享', key: 'share', width: 150 },
-  { title: '备注', key: 'remark', ellipsis: true },
+  { title: '备注', key: 'remark', width: 280, ellipsis: true },
   { title: '操作', key: 'action', width: 380 },
 ]
 

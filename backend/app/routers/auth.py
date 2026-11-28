@@ -14,6 +14,7 @@ from ..db import get_db
 from ..deps import COOKIE_NAME, COOKIE_PATH, UserContext, get_current_user
 from ..models import ComUser, Role, Switch, UserOrg, UserRole, UserSession
 from ..schemas.auth import (
+    AiCaptionRequest,
     ChangePasswordRequest,
     LoginData,
     LoginRequest,
@@ -114,6 +115,7 @@ def _user_info(db: Session, user: ComUser, role: str) -> UserInfo:
         user_type=user.user_type,
         role_code=role,
         create_time=user.insert_time,
+        ai_caption_enabled=bool(user.ai_caption_enabled),
     )
 
 
@@ -307,6 +309,20 @@ def me(db: Session = Depends(get_db), user: UserContext = Depends(get_current_us
             menus=menu_service.menu_tree_for_user(db, user.id, user.is_owner),
         )
     )
+
+
+@router.post("/aiCaption")
+def save_ai_caption(
+    payload: AiCaptionRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """个人级开关：上传后是否自动调用 AI 生成照片/视频注释。"""
+    entity = db.get(ComUser, user.id)
+    entity.ai_caption_enabled = payload.enabled
+    entity.update_user = user.userid
+    db.commit()
+    return ok({"aiCaptionEnabled": bool(entity.ai_caption_enabled)})
 
 
 @router.post("/changePassword")

@@ -2,7 +2,7 @@ import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..common import codes
@@ -117,7 +117,24 @@ def _apply_wheres(stmt, wheres: list[dict], user_id: int):
         elif column == "mood":
             stmt = stmt.where(DailyEntry.mood == str(value))
         elif column == "note":
-            stmt = stmt.where(DailyEntry.note.ilike(f"%{value}%"))
+            like = f"%{value}%"
+            # 同时命中当天照片/视频的 AI 配文与关键词，关键词检索才算真正可用
+            stmt = stmt.where(
+                or_(
+                    DailyEntry.note.ilike(like),
+                    DailyEntry.id.in_(
+                        select(Photo.entry_id).where(
+                            Photo.user_id == user_id,
+                            Photo.deleted_at.is_(None),
+                            Photo.entry_id.is_not(None),
+                            or_(
+                                Photo.caption.ilike(like),
+                                cast(Photo.ai_keywords, String).ilike(like),
+                            ),
+                        )
+                    ),
+                )
+            )
         elif column in ("tag", "tags"):
             tag_names.append(str(value))
         elif column in ("media_type", "mediaType"):

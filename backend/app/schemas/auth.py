@@ -36,6 +36,7 @@ class UserInfo(CamelModel):
     user_type: str = "1"
     role_code: str = "MEMBER"
     create_time: DateTimeStr | None = None
+    ai_caption_enabled: bool = True
 
 
 class LoginData(CamelModel):
@@ -57,3 +58,7 @@ class MeData(CamelModel):
     user_info: UserInfo
     switches: dict[str, str] = Field(default_factory=dict)
     menus: list[dict] = Field(default_factory=list)
+
+
+class AiCaptionRequest(CamelModel):
+    enabled: bool

@@ -49,6 +49,17 @@ class PhotoDescribeRequest(CamelModel):
     id: StrId
 
 
+class AiBackfillRequest(CamelModel):
+    start: date
+    end: date
+    regenerate: bool = False
+
+
+class AiStatusRequest(CamelModel):
+    start: date
+    end: date
+
+
 class ImmichAsset(CamelModel):
     id: str
     type: str = "IMAGE"

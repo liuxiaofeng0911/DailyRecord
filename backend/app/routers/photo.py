@@ -17,6 +17,8 @@ from ..deps import UserContext, get_current_user
 from ..models import ComUser, DailyEntry, Photo
 from ..schemas.entry import PhotoOut
 from ..schemas.photo import (
+    AiBackfillRequest,
+    AiStatusRequest,
     PhotoDeleteRequest,
     PhotoDescribeRequest,
     PhotoIdsRequest,
@@ -25,10 +27,10 @@ from ..schemas.photo import (
     TrashListRequest,
     UploadResult,
 )
-from ..services import audit, credential_service, photo_service, share_service, storage
+from ..services import ai_caption, audit, credential_service, photo_service, share_service, storage
 from ..services.entry_service import clear_cover
 from ..services.immich import ImmichError
-from ..services.ollama import OllamaError, describe_image
+from ..services.ollama import OllamaError
 from ..services.timeutil import now_shanghai, parse_datetime
 
 logger = logging.getLogger(__name__)
@@ -104,8 +106,8 @@ async def upload(
         if entry_date is not None and explicit_taken is None:
             taken_at = datetime.combine(entry_date, taken_at.time())
         ai_state = "disabled"
-        if settings.ai_enabled:
-            ai_state = "pending" if stored["media_type"] == "IMAGE" else "unsupported"
+        if settings.ai_enabled and entity is not None and entity.ai_caption_enabled:
+            ai_state = "pending"
 
         photo = Photo(
             user_id=user.id,
@@ -139,6 +141,7 @@ async def upload(
         if has_cover is None and created:
             created[0].is_cover = True
     db.commit()
+    ai_caption.enqueue([photo.id for photo in created if photo.ai_state == "pending"])
     return ok(UploadResult(photos=[PhotoOut.model_validate(p) for p in created], errors=errors))
 
 
@@ -319,6 +322,90 @@ def update_photo(
     return ok(PhotoOut.model_validate(photo))
 
 
+AI_BACKFILL_LIMIT = 200
+
+
+def _ai_range(start: date, end: date) -> tuple[datetime, datetime]:
+    if start > end:
+        raise ApiError(codes.BAD_REQUEST, "开始日期不能晚于结束日期")
+    return (
+        datetime.combine(start, datetime.min.time()),
+        datetime.combine(end, datetime.max.time()),
+    )
+
+
+@router.post("/ai/backfill")
+def ai_backfill(
+    payload: AiBackfillRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    """按日期范围补注释：默认只挑缺注释的素材，显式要求时才重跑已有 AI 结果。"""
+    if not settings.ai_enabled:
+        raise ApiError(codes.AI_DISABLED, "AI 能力未开启")
+    start, end = _ai_range(payload.start, payload.end)
+    rows = db.scalars(
+        select(Photo)
+        .where(
+            Photo.user_id == user.id,
+            Photo.deleted_at.is_(None),
+            Photo.media_type.in_(("IMAGE", "VIDEO")),
+            Photo.taken_at.is_not(None),
+            Photo.taken_at >= start,
+            Photo.taken_at <= end,
+        )
+        .order_by(Photo.taken_at)
+        .limit(AI_BACKFILL_LIMIT)
+    ).all()
+
+    picked: list[int] = []
+    skipped = 0
+    for photo in rows:
+        if photo.caption_source == "manual":
+            skipped += 1
+            continue
+        if not payload.regenerate and photo.ai_state == "done" and photo.caption:
+            skipped += 1
+            continue
+        photo.ai_state = "pending"
+        picked.append(photo.id)
+    db.commit()
+    ai_caption.enqueue(picked)
+    return ok({"queued": len(picked), "skipped": skipped, "limit": AI_BACKFILL_LIMIT})
+
+
+@router.post("/ai/status")
+def ai_status(
+    payload: AiStatusRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    start, end = _ai_range(payload.start, payload.end)
+    rows = db.execute(
+        select(Photo.ai_state, func.count())
+        .where(
+            Photo.user_id == user.id,
+            Photo.deleted_at.is_(None),
+            Photo.media_type.in_(("IMAGE", "VIDEO")),
+            Photo.taken_at.is_not(None),
+            Photo.taken_at >= start,
+            Photo.taken_at <= end,
+        )
+        .group_by(Photo.ai_state)
+    ).all()
+    counts = {state: count for state, count in rows}
+    return ok(
+        {
+            "total": sum(counts.values()),
+            "pending": counts.get("pending", 0),
+            "done": counts.get("done", 0),
+            "failed": counts.get("failed", 0),
+            "disabled": counts.get("disabled", 0),
+            "queued": ai_caption.pending_count(),
+        }
+    )
+
+
 @router.post("/delete")
 def delete_photo(
     payload: PhotoDeleteRequest,
@@ -482,36 +569,16 @@ async def describe_photo(
     ).first()
     if photo is None:
         raise not_found("照片不存在")
-    if photo.media_type != "IMAGE":
-        raise ApiError(codes.AI_DISABLED, "视频暂不支持自动描述")
     if photo.caption_source == "manual":
         return ok(PhotoOut.model_validate(photo))
 
     try:
-        content, _ = await storage.read_bytes(
-            photo, size="preview", client=credential_service.user_client(db, user.id)
-        )
-        note_hint = ""
-        if photo.entry_id:
-            entry = db.get(DailyEntry, photo.entry_id)
-            note_hint = entry.note if entry else ""
-        caption = await describe_image(content, note_hint)
+        await ai_caption.caption_photo(db, photo)
     except (OllamaError, ImmichError, FileNotFoundError) as exc:
         photo.ai_state = "failed"
         photo.ai_attempts = int(photo.ai_attempts or 0) + 1
         db.commit()
         raise ApiError(codes.AI_UNAVAILABLE, str(exc)) from exc
 
-    photo.caption = caption[:1000]
-    photo.caption_source = "ai"
-    photo.ai_state = "done"
-    photo.ai_attempts = int(photo.ai_attempts or 0) + 1
-    if settings.immich_write_description and photo.immich_asset_id and settings.immich_enabled:
-        try:
-            client = credential_service.user_client(db, user.id)
-            if client is not None:
-                await client.update_description(photo.immich_asset_id, photo.caption)
-        except ImmichError:
-            pass
     db.commit()
     return ok(PhotoOut.model_validate(photo))

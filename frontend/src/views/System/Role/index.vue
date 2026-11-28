@@ -15,7 +15,7 @@
         :loading="loading"
         row-key="id"
         size="middle"
-        :scroll="{ x: 640 }"
+        :scroll="{ x: 900 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'enable'">
@@ -108,7 +108,7 @@ const halfCheckedKeys = ref([])
 const columns = [
   { title: '编码', dataIndex: 'code', key: 'code', width: 140 },
   { title: '名称', dataIndex: 'name', key: 'name', width: 160 },
-  { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+  { title: '描述', dataIndex: 'description', key: 'description', width: 320, ellipsis: true },
   { title: '状态', key: 'enable', width: 100 },
   { title: '操作', key: 'action', width: 180 },
 ]

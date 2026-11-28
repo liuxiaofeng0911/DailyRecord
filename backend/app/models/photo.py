@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..db import Base
@@ -25,6 +26,10 @@ class Photo(CommonFields, Base):
     caption_source: Mapped[str] = mapped_column(String(8), nullable=False, default="none")
     ai_state: Mapped[str] = mapped_column(String(12), nullable=False, default="disabled")
     ai_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # AI 关键词数组，PostgreSQL 用 JSONB，开发态 SQLite 退化为 JSON
+    ai_keywords: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), nullable=False, default=list
+    )
     is_cover: Mapped[bool] = mapped_column(default=False, nullable=False)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)

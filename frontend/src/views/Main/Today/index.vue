@@ -92,6 +92,17 @@
               <span class="muted photo-hint">共 {{ photos.length }} 个素材</span>
             </div>
             <div class="photo-actions">
+              <a-tooltip :title="aiCaptionHint">
+                <label class="ai-toggle">
+                  <a-switch
+                    size="small"
+                    :checked="aiCaption"
+                    :loading="aiSaving"
+                    @change="toggleAiCaption"
+                  />
+                  <span>AI 注释</span>
+                </label>
+              </a-tooltip>
               <a-button :loading="uploading" :disabled="uploading" @click="triggerUpload">上传</a-button>
               <a-button v-if="mobile" :disabled="uploading" @click="triggerCamera">拍照</a-button>
               <a-button @click="openImmich">从照片库导入</a-button>
@@ -196,7 +207,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
-import { entryApi, immichApi, photoApi, tagApi } from '@/api/api'
+import { authApi, entryApi, immichApi, photoApi, tagApi } from '@/api/api'
 import AppIcon from '@/components/AppIcon.vue'
 import PhotoGrid from '@/components/PhotoGrid.vue'
 import HistoryDrawer from '@/components/HistoryDrawer.vue'
@@ -242,6 +253,25 @@ const selectedAssets = ref([])
 
 const dateValue = computed(() => dayjs(date.value))
 const mobile = computed(() => store.state.app.mobile)
+const aiCaption = computed(() => store.state.auth.userInfo?.aiCaptionEnabled !== false)
+const aiCaptionHint = computed(() =>
+  aiCaption.value ? '上传后自动生成配文与关键词，并追加到当天记录' : '已关闭，上传后不会自动注释',
+)
+const aiSaving = ref(false)
+
+async function toggleAiCaption(value) {
+  aiSaving.value = true
+  try {
+    const data = await authApi.aiCaption(value)
+    store.commit('auth/setUserInfo', {
+      ...store.state.auth.userInfo,
+      aiCaptionEnabled: data.aiCaptionEnabled,
+    })
+    message.success(data.aiCaptionEnabled ? '已开启 AI 自动注释' : '已关闭 AI 自动注释')
+  } finally {
+    aiSaving.value = false
+  }
+}
 const dictMoods = computed(() => (store.state.dict.groups.MOOD || []).map((item) => item.name))
 const moodOptions = computed(() => {
   const groups = buildMoodGroups(dictMoods.value)
@@ -288,6 +318,7 @@ async function loadTagData() {
 }
 
 watch([note, mood, tags], () => {
+  if (externalSync) return
   saveDraft()
   dirty.value = true
 })
@@ -464,6 +495,7 @@ async function uploadFiles(files) {
     message.success(`已上传 ${result.photos.length} 个文件`)
     mergePhotos(result.photos)
     bumpVersions()
+    if (result.photos.some((photo) => photo.aiState === 'pending')) startAiPolling()
   } catch {
     // 失败提示由 axios 拦截器统一展示，这里只保证不再整页刷新、不丢失未保存内容
   } finally {
@@ -478,6 +510,77 @@ function mergePhotos(list) {
   const map = new Map(photos.value.map((photo) => [photo.id, photo]))
   list.forEach((photo) => map.set(photo.id, { ...map.get(photo.id), ...photo }))
   photos.value = [...map.values()]
+}
+
+/* AI 配文由后端异步生成，轮询把结果合并回网格，避免整页刷新 */
+let aiTimer = null
+let externalSync = false
+
+function mergeAiResult(list) {
+  const map = new Map((list || []).map((photo) => [photo.id, photo]))
+  let changed = false
+  photos.value = photos.value.map((photo) => {
+    const row = map.get(photo.id)
+    if (!row || row.aiState === photo.aiState) return photo
+    changed = true
+    return {
+      ...photo,
+      caption: row.caption,
+      aiKeywords: row.aiKeywords || [],
+      captionSource: row.captionSource,
+      aiState: row.aiState,
+    }
+  })
+  return changed
+}
+
+/* AI 会给当天正文追加注释，这里同步服务器版本，避免保存时撞乐观锁 */
+async function syncEntryAfterAi() {
+  try {
+    const data = await entryApi.get(date.value)
+    if (!data) return
+    if (!entry.value) {
+      entry.value = data
+      return
+    }
+    const serverNote = data.note || ''
+    const localNote = note.value || ''
+    externalSync = true
+    try {
+      if (serverNote !== localNote && serverNote.startsWith(localNote)) note.value = serverNote
+      if (!dirty.value) {
+        mood.value = data.mood ?? mood.value
+        tags.value = (data.tags || []).map((tag) => tag.name)
+      }
+    } finally {
+      externalSync = false
+    }
+    entry.value = { ...entry.value, version: data.version }
+  } catch {
+    externalSync = false
+  }
+}
+
+function startAiPolling() {
+  if (aiTimer) return
+  let rounds = 0
+  aiTimer = setInterval(async () => {
+    rounds += 1
+    let changed = false
+    try {
+      changed = mergeAiResult(
+        await photoApi.list({ start: date.value, end: date.value, pageSize: 200 }),
+      )
+    } catch {
+      // 轮询失败静默处理，等待下一轮
+    }
+    if (changed) await syncEntryAfterAi()
+    if (rounds >= 12 || !photos.value.some((photo) => photo.aiState === 'pending')) {
+      clearInterval(aiTimer)
+      aiTimer = null
+      if (changed) await syncEntryAfterAi()
+    }
+  }, 8000)
 }
 
 function onPaste(event) {
@@ -618,6 +721,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('beforeunload', onBeforeUnload)
   window.removeEventListener('paste', onPaste)
+  if (aiTimer) {
+    clearInterval(aiTimer)
+    aiTimer = null
+  }
 })
 </script>
 
@@ -760,6 +867,27 @@ onBeforeUnmount(() => {
 .photo-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ai-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .ai-toggle {
+    padding: 0 2px;
+    font-size: 12px;
+  }
 }
 
 .upload-progress {

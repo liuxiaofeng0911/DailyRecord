@@ -16,7 +16,7 @@
         row-key="id"
         size="middle"
         :default-expand-all-rows="true"
-        :scroll="{ x: 1000 }"
+        :scroll="{ x: 1050 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'icon'">
@@ -120,7 +120,7 @@ const ICONS = [
 const iconOptions = ICONS.map(([value, label]) => ({ value, label }))
 
 const columns = [
-  { title: '菜单名称', dataIndex: 'name', key: 'name' },
+  { title: '菜单名称', dataIndex: 'name', key: 'name', width: 220 },
   { title: '路径', key: 'path', width: 220 },
   { title: '图标', key: 'icon', width: 180 },
   { title: '排序', dataIndex: 'sort', key: 'sort', width: 80 },

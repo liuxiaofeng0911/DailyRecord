@@ -30,6 +30,7 @@ class PhotoOut(CamelModel):
     caption: str = ""
     caption_source: str = "none"
     ai_state: str = "disabled"
+    ai_keywords: list[str] = Field(default_factory=list)
     is_cover: bool = False
     width: int | None = None
     height: int | None = None

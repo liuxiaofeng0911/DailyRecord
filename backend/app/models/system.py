@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..common.snowflake import next_id
@@ -27,6 +27,8 @@ class ComUser(Base):
     token_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Shanghai")
     mobile: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # 上传后是否自动调用 AI 生成照片/视频注释，按用户独立控制
+    ai_caption_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     insert_time: Mapped[datetime] = mapped_column(DateTime, default=now_shanghai)
     update_time: Mapped[datetime] = mapped_column(DateTime, default=now_shanghai, onupdate=now_shanghai)
     insert_user: Mapped[str | None] = mapped_column(String(64), nullable=True)

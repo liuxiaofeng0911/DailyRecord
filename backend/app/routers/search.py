@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import or_, select
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..common.result import ok
@@ -30,7 +30,10 @@ def search(
             Photo.user_id == user.id,
             Photo.entry_id.is_not(None),
             Photo.deleted_at.is_(None),
-            Photo.caption.ilike(f"%{keyword}%"),
+            or_(
+                Photo.caption.ilike(f"%{keyword}%"),
+                cast(Photo.ai_keywords, String).ilike(f"%{keyword}%"),
+            ),
         )
         stmt = stmt.where(
             or_(DailyEntry.note.ilike(f"%{keyword}%"), DailyEntry.id.in_(photo_ids))

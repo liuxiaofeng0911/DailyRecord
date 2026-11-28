@@ -55,7 +55,7 @@
           :pagination="false"
           row-key="id"
           size="small"
-          :scroll="{ x: 660 }"
+          :scroll="{ x: 860 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'device'">
@@ -194,7 +194,7 @@ const user = computed(() => store.state.auth.userInfo || {})
 const roleLabel = computed(() => (user.value.roleCode === 'OWNER' ? '所有者' : '成员'))
 
 const sessionColumns = [
-  { title: '设备', key: 'device', ellipsis: true },
+  { title: '设备', key: 'device', width: 300, ellipsis: true },
   { title: 'IP', dataIndex: 'ip', key: 'ip', width: 130 },
   { title: '最近活跃', dataIndex: 'lastSeenAt', key: 'lastSeenAt', width: 170 },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 170 },

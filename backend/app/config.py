@@ -3,12 +3,15 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# 本地调试与 docker 共用仓库根目录的 .env（容器内不存在该文件，改用 compose 注入的环境变量）
+ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
+
 
 class Settings(BaseSettings):
     """全局配置，全部来自环境变量 / .env。"""
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore", case_sensitive=False
+        env_file=str(ROOT_ENV), env_file_encoding="utf-8", extra="ignore", case_sensitive=False
     )
 
     env: str = "dev"
@@ -48,11 +51,11 @@ class Settings(BaseSettings):
 
     ai_enabled: bool = False
     ollama_url: str = "http://ollama:11434"
-    ollama_vlm_model: str = "qwen2.5vl:7b"
+    ollama_vlm_model: str = "qwen3-vl:2b"
     ollama_text_model: str = "qwen2.5:7b"
 
     max_upload_mb: int = 200
-    cors_origins: str = "http://localhost:5173,http://localhost:8080"
+    cors_origins: str = "http://localhost:5173,http://localhost:8080,http://localhost:5173"
 
     photo_purge_enabled: bool = True
     photo_purge_hour: int = 3

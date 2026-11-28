@@ -29,7 +29,12 @@
           </button>
         </a-tooltip>
       </div>
-      <p v-if="photo.caption" class="caption">{{ photo.caption }}</p>
+      <p v-if="photo.caption || photo.aiKeywords?.length" class="caption">
+        <span v-if="photo.caption" class="text">{{ photo.caption }}</span>
+        <span v-if="photo.aiKeywords?.length" class="keywords">
+          #{{ photo.aiKeywords.join(' #') }}
+        </span>
+      </p>
     </div>
     <slot />
     <PhotoViewer v-model:open="viewerOpen" :photos="photos" :start-index="viewerIndex" />
@@ -206,5 +211,30 @@ function openViewer(index) {
   font-size: 12px;
   color: #fff;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+
+  .text {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .keywords {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    opacity: 0.82;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 768px) {
+  .caption {
+    padding: 14px 8px 6px;
+    font-size: 11px;
+  }
 }
 </style>

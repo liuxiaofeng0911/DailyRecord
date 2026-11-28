@@ -16,7 +16,7 @@ from ..deps import UserContext, get_current_user
 from ..models import ComUser, DailyEntry, Photo
 from ..schemas.entry import PhotoOut
 from ..schemas.photo import ImmichImportRequest, ImmichStatusOut
-from ..services import credential_service
+from ..services import ai_caption, credential_service
 from ..services.immich import ImmichError
 from ..services.timeutil import now_shanghai
 
@@ -221,6 +221,8 @@ async def import_assets(
     ).first()
 
     created: list[Photo] = []
+    entity = db.get(ComUser, user.id)
+    ai_pending = settings.ai_enabled and entity is not None and entity.ai_caption_enabled
     for item in items:
         if not item["id"] or item["id"] in existing:
             continue
@@ -237,7 +239,7 @@ async def import_assets(
             taken_at=item["taken_at"] or now_shanghai(),
             caption=caption[:1000],
             caption_source="immich" if caption else "none",
-            ai_state="disabled",
+            ai_state="pending" if ai_pending and not caption else "disabled",
             insert_user=user.userid,
         )
         db.add(photo)
@@ -252,4 +254,5 @@ async def import_assets(
         if has_cover is None:
             created[0].is_cover = True
     db.commit()
+    ai_caption.enqueue([photo.id for photo in created if photo.ai_state == "pending"])
     return ok({"imported": len(created), "photos": [PhotoOut.model_validate(p) for p in created]})

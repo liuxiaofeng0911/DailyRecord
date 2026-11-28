@@ -26,7 +26,7 @@
         :pagination="false"
         row-key="id"
         size="middle"
-        :scroll="{ x: 1120 }"
+        :scroll="{ x: 1350 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'active'">
@@ -153,7 +153,7 @@ const resetValue = ref('')
 const columns = [
   { title: '账号', dataIndex: 'userid', key: 'userid', width: 140 },
   { title: '显示名', dataIndex: 'username', key: 'username', width: 120 },
-  { title: '邮箱', dataIndex: 'email', key: 'email', ellipsis: true },
+  { title: '邮箱', dataIndex: 'email', key: 'email', width: 240, ellipsis: true },
   { title: '角色', dataIndex: 'roleCode', key: 'roleCode', width: 100 },
   { title: '所属组织', key: 'orgs', width: 180 },
   { title: '状态', key: 'active', width: 90 },
